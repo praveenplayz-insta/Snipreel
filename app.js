@@ -73,19 +73,26 @@ async function loadASR(){const {pipeline}=await import('https://cdn.jsdelivr.net
  const mk=o=>pipeline('automatic-speech-recognition',MODEL,{...o,progress_callback:cb});let r;
  if(mobile)r=await mk({device:'wasm',dtype:'q8'});else{try{r=await mk(navigator.gpu?{device:'webgpu',dtype:{encoder_model:'fp32',decoder_model_merged:'q4'}}:{device:'wasm',dtype:'q8'})}catch(e){log('GPU mode failed, switching to CPU');r=await mk({device:'wasm',dtype:'q8'})}}
  setM('model',1);log('Speech model ready ('+MODEL.split('/')[1]+')');return r}
-/* low-memory audio capture: plays the file silently and records 16 kHz mono, never loads the whole file into RAM */
+/* fast path: decode the audio track straight from the file (seconds, no playback) */
+async function decodeAll(){if(file.size>300*1048576)throw Error('file too large for direct decoding');
+ let buf;try{buf=await file.arrayBuffer()}catch(e){buf=await new Response(file).arrayBuffer()}
+ const ac=new AudioContext({sampleRate:16000});let d;try{d=await ac.decodeAudioData(buf)}finally{buf=null;ac.close&&ac.close()}
+ const L=d.getChannelData(0);if(d.numberOfChannels<2)return L;const R=d.getChannelData(1),m=new Float32Array(L.length);for(let i=0;i<L.length;i++)m[i]=(L[i]+R[i])/2;return m}
+/* fallback: plays the file silently and records 16 kHz mono, placing samples by media time so stalls cannot shift captions */
 async function audioStream(rate,bar){const av=document.createElement('video');av.src=vid.src;av.playsInline=true;av.preload='auto';
  av.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';document.body.append(av);
  await once(av,'loadedmetadata');log(`Audio source opened, ${fmt(av.duration)} long, reading at ${rate}x speed`);
+ const need=Math.ceil(av.duration*16000/rate),buf=new Float32Array(need+32000);
  const ac=new AudioContext({sampleRate:16000}),src=ac.createMediaElementSource(av),sp=ac.createScriptProcessor(4096,1,1),z=ac.createGain();z.gain.value=0;
- const parts=[];sp.onaudioprocess=e=>parts.push(new Float32Array(e.inputBuffer.getChannelData(0)));src.connect(sp);sp.connect(z);z.connect(ac.destination);
+ sp.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0),i=Math.max(0,Math.round(av.currentTime*16000/rate)-d.length);if(i+d.length<=buf.length)buf.set(d,i)};
+ src.connect(sp);sp.connect(z);z.connect(ac.destination);
  av.playbackRate=rate;await ac.resume();await av.play();log('Playback started');
  await new Promise(res=>{let last=-1,still=0,lg=0;const fin=w=>{clearInterval(iv);log(w);res()};
   const iv=setInterval(()=>{const p=Math.min(1,av.currentTime/av.duration);setM('audio',p);bar(.02+p*.3);msg(`Listening to the audio, ${Math.round(p*100)}%.`);
    if(Math.floor(p*5)>lg){lg=Math.floor(p*5);log(`Listening, ${lg*20}%`)}
    if(av.ended||av.duration-av.currentTime<.3)return fin('Audio captured');
-   if(av.currentTime===last){still++;if(still===6){log('Playback stalled, nudging it');av.play().catch(()=>{})}if(still>=30)return fin('Playback stopped early, using the audio captured so far')}else{still=0;last=av.currentTime}},500)});
- setM('audio',1);ac.close();av.remove();const n=parts.reduce((t,q)=>t+q.length,0),out=new Float32Array(n);let o=0;parts.forEach(q=>{out.set(q,o);o+=q.length});return out}
+   if(av.currentTime===last){still++;if(still===6||still===14){log('Playback stalled, restarting it');av.currentTime=av.currentTime+.05;av.play().catch(()=>{})}if(still>=30)return fin('Playback stopped early, using the audio captured so far')}else{still=0;last=av.currentTime}},500)});
+ setM('audio',1);ac.close();av.remove();return buf.subarray(0,need)}
 /* removes words the model invented: loops, and words spoken over silence */
 function clean(W,a,rate){const out=[];let run=0,prev='';
  for(const x of W){const k=x.w.toLowerCase().replace(/[^a-z0-9']/g,''),i0=Math.max(0,Math.floor(x.s*16000)),i1=Math.min(a.length,Math.max(i0+2,Math.floor(Math.min(x.e,x.s+1)*16000)));
@@ -101,7 +108,7 @@ async function transcribe(bar){
  const key=`snipreel:v2:${file.name}:${file.size}:${MODEL}`;
  try{const c=JSON.parse(localStorage.getItem(key)||'null');if(c&&c.length>10){log('Found a saved transcript for this video, skipping the audio and transcription steps');['audio','model','txt'].forEach(k=>setM(k,1));return c}}catch(e){}
  const lp=loadASR();let a,rate=1;
- try{if(mobile)throw 0;log('Decoding audio on this device');const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer());a=buf.getChannelData(0);setM('audio',1)}catch(e){rate=vid.duration>300?1.5:1;log('Using low-memory audio capture');a=await audioStream(rate,bar)}
+ try{log('Decoding the audio straight from the file');a=await decodeAll();setM('audio',1);bar(.3);log(`Audio decoded, ${fmt(a.length/16000)} of sound`)}catch(e){rate=vid.duration>300?1.5:1;log(`Direct decoding failed (${e.name||e.message}). Listening in real time instead.`);a=await audioStream(rate,bar)}
  msg('Loading the speech model.');const asr=await lp;
  const segs=splits(a),words=[];log(`Transcribing in ${segs.length} parts`);
  for(let i=0;i<segs.length;i++){const [p,q]=segs[i];msg(`Writing the transcript, part ${i+1} of ${segs.length}.`);bar(.32+.3*i/segs.length);
@@ -126,21 +133,22 @@ async function render(c,prog){const cv=document.createElement('canvas');cv.width
  const rec=new MediaRecorder(st,{mimeType:mime,videoBitsPerSecond:6e6}),chunks=[];rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
  const done=new Promise(r=>rec.onstop=r);let cx=.5,tx=.5,n=0,last=-1;const hist=[];
  pv.style.display='block';rec.start();await vid.play();
- await new Promise(res=>{const go=cb=>vid.requestVideoFrameCallback?vid.requestVideoFrameCallback(cb):requestAnimationFrame(()=>cb(0,{mediaTime:vid.currentTime}));
-  const step=(_,md)=>{const t=md&&md.mediaTime!=null?md.mediaTime:vid.currentTime;if(t>=c.e||vid.ended){res();return}
+ let lk=performance.now(),stop=null;const wd=setInterval(()=>{const q=performance.now()-lk;if(q>5000&&q<20000)vid.play().catch(()=>{});if(q>=20000&&stop){log('Playback stalled, ending this clip early');stop()}},2000);
+ await new Promise(res=>{stop=res;const go=cb=>vid.requestVideoFrameCallback?vid.requestVideoFrameCallback(cb):requestAnimationFrame(()=>cb(0,{mediaTime:vid.currentTime}));
+  const step=(_,md)=>{lk=performance.now();const t=md&&md.mediaTime!=null?md.mediaTime:vid.currentTime;if(t>=c.e||vid.ended){res();return}
    if(t-last<.03){go(step);return}last=t;
    if(face&&n++%3===0){try{const d=face.detectForVideo(vid,performance.now()).detections;if(d.length){const b=d.sort((p,q)=>q.boundingBox.width-p.boundingBox.width)[0].boundingBox;
     hist.push((b.originX+b.width/2)/vid.videoWidth);if(hist.length>7)hist.shift();const m=[...hist].sort((p,q)=>p-q)[hist.length>>1];if(Math.abs(m-tx)>.035)tx=m}}catch(e){}}
    cx+=Math.max(-.01,Math.min(.01,(tx-cx)*.07));
    frame(x,cx);caps(x,c.w,t);pc.drawImage(cv,0,0);if(vt)vt.requestFrame();prog((t-c.s)/(c.e-c.s));go(step)};go(step)});
- vid.pause();rec.stop();await done;pv.style.display='none';return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
+ clearInterval(wd);vid.pause();rec.stop();await done;pv.style.display='none';return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
 
 /* main flow */
 const STG=['Listening and transcribing','Choosing the best moments','Finding the speaker','Rendering clips','All done'];
 const step=i=>{$('#stage').textContent=STG[i];log(STG[i]);[...$('#steps').children].forEach((li,k)=>li.className=k<i?'done':k==i?'on':'')};
 $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return msg('This browser cannot export video. Use Chrome on Android or a desktop browser.');busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=$('#live').hidden=false;$('#sum').hidden=true;$('#log').innerHTML='';['model','audio','txt','clips'].forEach(k=>setM(k,0));t0=Date.now();clearInterval(tk);tk=setInterval(()=>$('#elapsed').textContent=fmt((Date.now()-t0)/1000),1000);log('Started');$('#grid').innerHTML='';
  const bar=v=>$('#bar').style.width=Math.round(v*100)+'%';
- try{const fp=initFace();step(0);bar(.02);const W=await transcribe(bar);if(W.length<10)throw Error('No clear speech was found in this video.');
+ try{const fp=initFace();step(0);bar(.02);const W=await transcribe(bar);if(W.length<10)throw Error('No clear speech was found. If the video has talking, run it again.');
   log(`Transcript ready, ${W.length} words`);summary(W);step(1);msg('Choosing the best moments.');const cl=pick(W,S.len);if(!cl.length)throw Error('Could not find a moment of that length. Try a shorter clip length.');
   cl.forEach((c,i)=>{c.el=document.createElement('article');c.el.className='card';c.el.innerHTML='<div class="vp sk"></div><div class="meta"><span class="score"></span><h4></h4><p></p></div>';
    c.el.querySelector('.score').textContent=`Hook score ${c.score}`;c.el.querySelector('h4').textContent=c.title;c.el.querySelector('p').textContent=`${fmt(c.s)} to ${fmt(c.e)}`;$('#grid').append(c.el)});
