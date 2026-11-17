@@ -94,3 +94,31 @@ footer{text-align:center;color:var(--mu);font-size:.9rem;padding:2rem 1rem 3rem;
 .sum{background:#7c5cff1f;border:1px solid var(--violet);border-radius:14px;padding:.8rem 1rem;font-size:.95rem}
 .log{list-style:none;padding:0;max-height:190px;overflow:auto;font:400 .85rem/1.5 "DM Sans",sans-serif;color:var(--mu);display:grid;gap:.1rem;white-space:pre-wrap}
 .log li:first-child{color:var(--tx)}
+
+/* hero: three static reel cards, fanned like a hand of cards */
+.fan{position:relative;justify-self:center;width:min(100%,480px);height:clamp(400px,62vw,540px);--w:clamp(138px,38vw,215px)}
+.reel{position:absolute;left:50%;bottom:6px;margin:0 0 0 calc(var(--w)/-2);width:var(--w);aspect-ratio:9/16;padding:8px;border-radius:20px;background:#fbf8ff;box-shadow:0 22px 44px #000a,0 0 0 1px #ffffff55 inset;transform-origin:50% 135%;transition:transform .25s ease}
+.r1{transform:translateX(-62%) rotate(-13deg)}
+.r2{transform:translateY(-16px);z-index:2}
+.r3{transform:translateX(62%) rotate(13deg)}
+.r1:hover{transform:translateX(-62%) rotate(-16deg) translateY(-10px)}
+.r2:hover{transform:translateY(-28px)}
+.r3:hover{transform:translateX(62%) rotate(16deg) translateY(-10px)}
+.art{position:absolute;inset:8px;border-radius:14px;overflow:hidden}
+.art::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 50%,#000a)}
+.a1{background:linear-gradient(170deg,#2a1f6b,#7c5cff 45%,#ff7aa2)}
+.a2{background:linear-gradient(170deg,#0f3b4a,#17a2a2 50%,#ffd23f)}
+.a3{background:linear-gradient(170deg,#3b0f3f,#d1357a 50%,#ff9a55)}
+.art .h{position:absolute;left:50%;top:22%;width:34%;aspect-ratio:1;margin-left:-17%;border-radius:50%;background:#150f2e;box-shadow:0 0 0 3px #ffffff30}
+.art .b{position:absolute;left:50%;top:46%;width:78%;height:60%;margin-left:-39%;border-radius:50% 50% 0 0/38% 38% 0 0;background:#150f2e}
+.cap{position:absolute;z-index:1;left:12px;right:12px;bottom:17%;margin:0;text-align:center;font:800 clamp(.9rem,2.4vw,1.2rem)/1.15 "Bricolage Grotesque",sans-serif;color:#fff;text-shadow:0 2px 0 #000,0 0 8px #000a}
+.cap b{font-weight:800}
+.cap.pop b{color:#ffd23f}
+.cap.box b{background:#ff5c93;border-radius:8px;padding:0 .3em;text-shadow:none}
+.cap.neon b{color:#3ef2c1;text-shadow:0 0 12px #3ef2c1}
+.ix{position:absolute;z-index:2;font:700 .95rem/1 "DM Sans",sans-serif;font-style:normal;text-align:center;background:#fbf8ff;border-radius:6px;padding:.22rem .32rem}
+.ix.tl{left:15px;top:15px}.ix.br{right:15px;bottom:15px;transform:rotate(180deg)}
+.s1 .ix{color:#15112e}.s2 .ix,.s3 .ix{color:#d1203f}
+.liverow{display:flex;gap:1rem;align-items:flex-start}
+.liverow .meters{flex:1}
+#pv{display:none;width:96px;flex:none;border-radius:12px;border:1px solid var(--line)}

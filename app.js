@@ -1,6 +1,13 @@
 const $=s=>document.querySelector(s),once=(e,n)=>new Promise(r=>e.addEventListener(n,r,{once:true}));
-const GR={natural:'none',cinema:'contrast(1.18) saturate(1.25) sepia(.18) hue-rotate(-10deg) brightness(.97)',vivid:'saturate(1.6) contrast(1.1)',warm:'sepia(.3) saturate(1.3) brightness(1.04)',cool:'hue-rotate(12deg) saturate(1.1) contrast(1.08) brightness(1.02)',noir:'grayscale(1) contrast(1.35)'};
-const DOT={natural:'#bbb',cinema:'#c9744a',vivid:'#ff3d81',warm:'#ffb347',cool:'#4cc9f0',noir:'#444'};
+const GR={
+ natural:{f:'none'},
+ cinema:{f:'contrast(1.1) saturate(1.08)',tint:['#1f6f8b','#ff9a55'],ta:.55,vig:.32},
+ vivid:{f:'contrast(1.06) saturate(1.35) brightness(1.03)',vig:.12},
+ warm:{f:'saturate(1.08) brightness(1.03)',tint:['#ffb26b','#ff8a3d'],ta:.5,vig:.2},
+ cool:{f:'saturate(1.05) contrast(1.05)',tint:['#4aa3ff','#6fd0ff'],ta:.45,vig:.2},
+ fade:{f:'contrast(.92) saturate(.85) brightness(1.06)',tint:['#9aa7c7','#e8c9b0'],ta:.35},
+ noir:{f:'grayscale(1) contrast(1.22) brightness(.98)',vig:.42}};
+const DOT={natural:'#bbb',cinema:'#c9744a',vivid:'#ff3d81',warm:'#ffb347',cool:'#4cc9f0',noir:'#444',fade:'#b9a9c9'};
 const S={grade:'cinema',cap:'pop',len:30};let file=null,busy=false,face=null;
 const vid=document.createElement('video');vid.playsInline=true;vid.preload='auto';
 const mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||matchMedia('(pointer:coarse)').matches;
@@ -14,7 +21,10 @@ const sync=()=>cs.forEach(c=>c.sync());sync();
 
 /* drawing */
 function frame(x,cx){const vw=vid.videoWidth,vh=vid.videoHeight;let ch=vh,cw=vh*9/16;if(cw>vw){cw=vw;ch=vw*16/9}
- const sx=Math.min(Math.max(cx*vw-cw/2,0),vw-cw),sy=(vh-ch)/2;x.filter=GR[S.grade];x.drawImage(vid,sx,sy,cw,ch,0,0,W_,H_);x.filter='none'}
+ const sx=Math.min(Math.max(cx*vw-cw/2,0),vw-cw),sy=(vh-ch)/2,G=GR[S.grade]||GR.natural;
+ x.filter=G.f;x.drawImage(vid,sx,sy,cw,ch,0,0,W_,H_);x.filter='none';
+ if(G.tint){const g=x.createLinearGradient(0,0,0,H_);g.addColorStop(0,G.tint[0]);g.addColorStop(1,G.tint[1]);x.globalCompositeOperation='soft-light';x.globalAlpha=G.ta;x.fillStyle=g;x.fillRect(0,0,W_,H_);x.globalCompositeOperation='source-over';x.globalAlpha=1}
+ if(G.vig){const r=x.createRadialGradient(W_/2,H_/2,H_*.32,W_/2,H_/2,H_*.72);r.addColorStop(0,'rgba(0,0,0,0)');r.addColorStop(1,`rgba(0,0,0,${G.vig})`);x.fillStyle=r;x.fillRect(0,0,W_,H_)}}
 const TH={
  pop:{up:1,on:'#ffd23f',off:'#fff'},
  clean:{on:'#fff',off:'#ffffffa0'},
@@ -24,7 +34,7 @@ const TH={
  fire:{up:1,on:'#ff9a1f',off:'#fff',glow:'#ff3d00'},
  ice:{on:'#8fe3ff',off:'#fff',glow:'#4cc9f0'},
  type:{font:'"Courier New",monospace',on:'#3ef2c1',off:'#fff',bar:'#000000b8'}};
-function caps(x,ws,t){if(!ws.length)return;let i=ws.findIndex(w=>t<w.e);if(i<0)i=ws.length-1;const g=Math.floor(i/3)*3,seg=ws.slice(g,g+3),T=TH[S.cap]||TH.pop;
+function caps(x,ws,t){if(!ws.length)return;let i=-1;for(let k=0;k<ws.length;k++){if(ws[k].s<=t+.05)i=k;else break}if(i<0||t>ws[i].e+.35)return;const g=Math.floor(i/3)*3,seg=ws.slice(g,g+3),T=TH[S.cap]||TH.pop;
  const txt=w=>T.up?w.w.toUpperCase():w.w,fam=T.font||'"Bricolage Grotesque",sans-serif',wt=T.font?700:800;const K=W_/540;let fs=62*K,sp=16*K,tw;
  const set=()=>{x.font=`${wt} ${fs}px ${fam}`;tw=seg.reduce((a,w)=>a+x.measureText(txt(w)).width,0)+sp*(seg.length-1)};
  set();if(tw>470*K){fs*=470*K/tw;sp*=470*K/tw;set()}
@@ -35,14 +45,6 @@ function caps(x,ws,t){if(!ws.length)return;let i=ws.findIndex(w=>t<w.e);if(i<0)i
   if(T.hard){x.fillStyle=T.hard;x.fillText(s,px+5,y+5)}
   if(!T.bar){x.strokeStyle='#000';x.strokeText(s,px,y)}
   x.fillStyle=on?T.on:T.off;if(T.glow&&on){x.shadowColor=T.glow;x.shadowBlur=24}x.fillText(s,px,y);x.shadowBlur=0;px+=ww+sp})}
-const DW='Hook them in the first three seconds'.split(' ').map((w,i)=>({w,s:i*.5,e:i*.5+.5}));
-let lt=0;function tick(n){if(!busy&&n-lt>(mobile?90:30)){lt=n;const t=n/1000;if(!file){const g=pc.createLinearGradient(0,0,W_,H_);g.addColorStop(0,`hsl(${250+Math.sin(t)*25} 70% 28%)`);g.addColorStop(1,`hsl(${330+Math.cos(t*.8)*25} 75% 38%)`);pc.fillStyle=g;pc.fillRect(0,0,W_,H_);
- pc.fillStyle='#ffffff22';pc.beginPath();pc.arc(W_/2,330+Math.sin(t*1.3)*14,110,0,7);pc.fill();pc.fillRect(W_/2-150,450,300,420)}else if(vid.readyState>1)frame(pc,.5);caps(pc,DW,t%3.5)}requestAnimationFrame(tick)}
-requestAnimationFrame(tick);
-
-/* tilt */
-const ph=$('#phone');addEventListener('pointermove',e=>{ph.style.setProperty('--ry',((e.clientX/innerWidth-.5)*16-8)+'deg');ph.style.setProperty('--rx',((.5-e.clientY/innerHeight)*10)+'deg')});
-
 /* file input */
 const drop=$('#drop'),inp=$('#f');
 drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}});
@@ -67,8 +69,8 @@ function summary(W){const stop=new Set('the and but with this that was are have 
 async function loadASR(){const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm'),F={};
  const cb=p=>{if(p.status==='initiate')log('Fetching '+String(p.file).split('/').pop());
   if(p.status==='progress'&&p.total){F[p.file]={l:p.loaded,t:p.total};const v=Object.values(F);setM('model',v.reduce((a,x)=>a+x.l,0)/v.reduce((a,x)=>a+x.t,0))}};
- const mk=o=>pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{...o,progress_callback:cb});let r;
- if(mobile)r=await mk({device:'wasm',dtype:'q8'});else{try{r=await mk({device:navigator.gpu?'webgpu':'wasm'})}catch(e){log('GPU mode failed, switching to CPU');r=await mk({device:'wasm',dtype:'q8'})}}
+ const mk=o=>pipeline('automatic-speech-recognition','Xenova/whisper-base.en',{...o,progress_callback:cb});let r;
+ if(mobile)r=await mk({device:'wasm',dtype:'q8'});else{try{r=await mk(navigator.gpu?{device:'webgpu',dtype:{encoder_model:'fp32',decoder_model_merged:'q4'}}:{device:'wasm',dtype:'q8'})}catch(e){log('GPU mode failed, switching to CPU');r=await mk({device:'wasm',dtype:'q8'})}}
  setM('model',1);log('Speech model ready');return r}
 /* low-memory audio capture: plays the file silently and records 16 kHz mono, never loads the whole file into RAM */
 async function audioStream(rate,bar){const av=document.createElement('video');av.src=vid.src;av.playsInline=true;av.preload='auto';
@@ -83,12 +85,19 @@ async function audioStream(rate,bar){const av=document.createElement('video');av
    if(av.ended||av.duration-av.currentTime<.3)return fin('Audio captured');
    if(av.currentTime===last){still++;if(still===6){log('Playback stalled, nudging it');av.play().catch(()=>{})}if(still>=30)return fin('Playback stopped early, using the audio captured so far')}else{still=0;last=av.currentTime}},500)});
  setM('audio',1);ac.close();av.remove();const n=parts.reduce((t,q)=>t+q.length,0),out=new Float32Array(n);let o=0;parts.forEach(q=>{out.set(q,o);o+=q.length});return out}
+/* removes words the model invented: loops, and words spoken over silence */
+function clean(W,a,rate){const out=[];let run=0,prev='';
+ for(const x of W){const k=x.w.toLowerCase().replace(/[^a-z0-9']/g,''),i0=Math.max(0,Math.floor(x.s*16000)),i1=Math.min(a.length,Math.max(i0+2,Math.floor(Math.min(x.e,x.s+1)*16000)));
+  let sum=0,c=0;for(let i=i0;i<i1;i+=8){sum+=Math.abs(a[i]);c++}if(c&&sum/c<.004)continue;
+  run=k===prev?run+1:1;prev=k;if(run>3)continue;
+  let e=x.e;if(e-x.s>1.5)e=x.s+.6;if(e<=x.s)e=x.s+.2;out.push({w:x.w,s:x.s*rate,e:e*rate})}
+ if(out.length<W.length)log(`Removed ${W.length-out.length} doubtful words (loops or silence)`);return out}
 async function transcribe(bar){const lp=loadASR();let a,rate=1;
- try{if(mobile)throw 0;log('Decoding audio on this device');const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer());a=buf.getChannelData(0);setM('audio',1)}catch(e){rate=2;log('Using low-memory audio capture');a=await audioStream(rate,bar)}
+ try{if(mobile)throw 0;log('Decoding audio on this device');const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer());a=buf.getChannelData(0);setM('audio',1)}catch(e){rate=vid.duration>300?1.5:1;log('Using low-memory audio capture');a=await audioStream(rate,bar)}
  msg('Loading the speech model.');const asr=await lp;const ib=$('#b-txt').parentElement;ib.classList.add('ind');
  log('Transcribing speech. This is the slowest step and has no percentage, but the timer above keeps running.');msg('Writing the transcript. This can take a few minutes.');
- const o=await asr(a,{return_timestamps:'word',chunk_length_s:30,stride_length_s:5});ib.classList.remove('ind');setM('txt',1);
- return o.chunks.map(c=>({w:c.text.trim(),s:c.timestamp[0]*rate,e:(c.timestamp[1]??c.timestamp[0]+.3)*rate})).filter(w=>w.w)}
+ const opt={return_timestamps:'word',chunk_length_s:30,stride_length_s:5};let o;try{o=await asr(a,{...opt,no_repeat_ngram_size:4})}catch(e){log('Retrying transcription with default settings');o=await asr(a,opt)}ib.classList.remove('ind');setM('txt',1);
+ return clean(o.chunks.map(c=>({w:c.text.trim(),s:c.timestamp[0],e:c.timestamp[1]??c.timestamp[0]+.3})).filter(w=>w.w),a,rate)}
 function pick(W,len){const Sx=[];let cur=[];W.forEach((x,i)=>{cur.push(x);const n=W[i+1];if(/[.?!]$/.test(x.w)||(n&&n.s-x.e>.7)){Sx.push(cur);cur=[]}});if(cur.length)Sx.push(cur);
  const hook=/\b(secret|never|always|why|how|mistake|truth|biggest|best|worst|actually|imagine|stop|learn|money|free|nobody|everyone|important)\b/i,cand=[];
  for(let i=0;i<Sx.length;i++){let w=[];for(let j=i;j<Sx.length;j++){w=w.concat(Sx[j]);const d=w.at(-1).e-w[0].s;if(d>len*1.25)break;if(d<len*.6)continue;
@@ -100,19 +109,25 @@ function pick(W,len){const Sx=[];let cur=[];W.forEach((x,i)=>{cur.push(x);const 
 /* render one clip in real time */
 async function render(c,prog){const cv=document.createElement('canvas');cv.width=W_;cv.height=H_;const x=cv.getContext('2d');
  vid.currentTime=c.s;await once(vid,'seeked');
- const st=cv.captureStream(30);(vid.captureStream?vid.captureStream():{getAudioTracks:()=>[]}).getAudioTracks().forEach(t=>st.addTrack(t));
+ let st=cv.captureStream(0),vt=st.getVideoTracks()[0];if(!vt||!vt.requestFrame){st=cv.captureStream(30);vt=null}
+ (vid.captureStream?vid.captureStream():{getAudioTracks:()=>[]}).getAudioTracks().forEach(t=>st.addTrack(t));
  const mime=['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));
- const rec=new MediaRecorder(st,{mimeType:mime,videoBitsPerSecond:5e6}),chunks=[];rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
- const done=new Promise(r=>rec.onstop=r);let cx=.5,n=0;rec.start();await vid.play();
- await new Promise(res=>{const loop=()=>{const t=vid.currentTime;if(t>=c.e||vid.ended){res();return}
-  if(face&&n++%5===0){try{const d=face.detectForVideo(vid,performance.now()).detections;if(d.length){const b=d.sort((p,q)=>q.boundingBox.width-p.boundingBox.width)[0].boundingBox;cx+=((b.originX+b.width/2)/vid.videoWidth-cx)*.6}}catch(e){}}
-  frame(x,cx);caps(x,c.w,t);pc.drawImage(cv,0,0);prog((t-c.s)/(c.e-c.s));requestAnimationFrame(loop)};loop()});
- vid.pause();rec.stop();await done;return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
+ const rec=new MediaRecorder(st,{mimeType:mime,videoBitsPerSecond:6e6}),chunks=[];rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+ const done=new Promise(r=>rec.onstop=r);let cx=.5,tx=.5,n=0,last=-1;const hist=[];
+ pv.style.display='block';rec.start();await vid.play();
+ await new Promise(res=>{const go=cb=>vid.requestVideoFrameCallback?vid.requestVideoFrameCallback(cb):requestAnimationFrame(()=>cb(0,{mediaTime:vid.currentTime}));
+  const step=(_,md)=>{const t=md&&md.mediaTime!=null?md.mediaTime:vid.currentTime;if(t>=c.e||vid.ended){res();return}
+   if(t-last<.03){go(step);return}last=t;
+   if(face&&n++%3===0){try{const d=face.detectForVideo(vid,performance.now()).detections;if(d.length){const b=d.sort((p,q)=>q.boundingBox.width-p.boundingBox.width)[0].boundingBox;
+    hist.push((b.originX+b.width/2)/vid.videoWidth);if(hist.length>7)hist.shift();const m=[...hist].sort((p,q)=>p-q)[hist.length>>1];if(Math.abs(m-tx)>.035)tx=m}}catch(e){}}
+   cx+=Math.max(-.01,Math.min(.01,(tx-cx)*.07));
+   frame(x,cx);caps(x,c.w,t);pc.drawImage(cv,0,0);if(vt)vt.requestFrame();prog((t-c.s)/(c.e-c.s));go(step)};go(step)});
+ vid.pause();rec.stop();await done;pv.style.display='none';return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
 
 /* main flow */
 const STG=['Listening to the audio','Choosing the best moments','Finding the speaker','Rendering clips','All done'];
 const step=i=>{$('#stage').textContent=STG[i];log(STG[i]);[...$('#steps').children].forEach((li,k)=>li.className=k<i?'done':k==i?'on':'')};
-$('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return msg('This browser cannot export video. Use Chrome on Android or a desktop browser.');busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=$('#live').hidden=false;$('#sum').hidden=true;$('#log').innerHTML='';['model','audio','txt','clips'].forEach(k=>setM(k,0));t0=Date.now();clearInterval(tk);tk=setInterval(()=>$('#elapsed').textContent=fmt((Date.now()-t0)/1000),1000);log('Started');$('#grid').innerHTML='';$('#recl').textContent='Rendering live';
+$('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return msg('This browser cannot export video. Use Chrome on Android or a desktop browser.');busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=$('#live').hidden=false;$('#sum').hidden=true;$('#log').innerHTML='';['model','audio','txt','clips'].forEach(k=>setM(k,0));t0=Date.now();clearInterval(tk);tk=setInterval(()=>$('#elapsed').textContent=fmt((Date.now()-t0)/1000),1000);log('Started');$('#grid').innerHTML='';
  const bar=v=>$('#bar').style.width=Math.round(v*100)+'%';
  try{const fp=initFace();step(0);bar(.02);const W=await transcribe(bar);if(W.length<10)throw Error('No clear speech was found in this video.');
   log(`Transcript ready, ${W.length} words`);summary(W);step(1);msg('Choosing the best moments.');const cl=pick(W,S.len);if(!cl.length)throw Error('Could not find a moment of that length. Try a shorter clip length.');
@@ -124,4 +139,4 @@ $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTML
    const a=document.createElement('a');a.className='btn sm';a.textContent='Download';a.href=r.url;a.download=`snipreel-clip-${i+1}.${r.ext}`;c.el.append(a)}
   step(4);bar(1);setM('clips',1);log('Finished');msg(face?'All clips are ready. Download the ones you like.':'Clips are ready, centered because face tracking could not load.')}
  catch(e){log('Stopped: '+(e.message||e.name));msg(e.name==='NotReadableError'?'The browser lost access to the file. Choose it again from your phone storage (not Google Photos or Drive) and retry.':'Something went wrong: '+e.message)}
- busy=false;clearInterval(tk);$('#go').disabled=false;$('#recl').textContent='Live preview'};
+ busy=false;clearInterval(tk);$('#go').disabled=false};

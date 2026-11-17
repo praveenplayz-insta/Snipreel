@@ -19,7 +19,11 @@
     <p>Drop a talk, podcast or interview. Snipreel finds the strongest moments, keeps the speaker in frame, grades the color and burns in captions. It is free, and your video never leaves your browser.</p>
     <div class="cta"><a class="btn" href="#studio">Make my clips</a><span class="note">No sign-up and no upload.</span></div>
   </div>
-  <div class="phone" id="phone"><canvas id="pv" width="540" height="960"></canvas><span class="rec" id="recl">Live preview</span></div>
+  <div class="fan" role="img" aria-label="Three example reels with captions, fanned like a hand of playing cards">
+    <figure class="reel r1 s1"><div class="art a1"><i class="h"></i><i class="b"></i></div><p class="cap pop">HOOK THEM IN <b>3</b> SECONDS</p><em class="ix tl">A<br>♠</em><em class="ix br">A<br>♠</em></figure>
+    <figure class="reel r2 s2"><div class="art a2"><i class="h"></i><i class="b"></i></div><p class="cap box">FIVE CLIPS, <b>ONE</b> UPLOAD</p><em class="ix tl">K<br>♥</em><em class="ix br">K<br>♥</em></figure>
+    <figure class="reel r3 s3"><div class="art a3"><i class="h"></i><i class="b"></i></div><p class="cap neon">FREE, IN YOUR <b>BROWSER</b></p><em class="ix tl">Q<br>♦</em><em class="ix br">Q<br>♦</em></figure>
+  </div>
 </section>
 
 <main id="studio" class="studio">
@@ -41,12 +45,12 @@
   <p id="msg" role="status"></p>
   <section class="panel live" id="live" hidden>
     <div class="lh"><h3>Live activity</h3><span>Now: <b id="stage">Starting</b></span><span>Elapsed <b id="elapsed">0:00</b></span></div>
-    <div class="meters">
+    <div class="liverow"><canvas id="pv" width="432" height="768" aria-label="Rendering preview"></canvas><div class="meters">
       <div class="meter"><span>Speech model download</span><b id="m-model">0%</b><i><u id="b-model"></u></i></div>
       <div class="meter"><span>Listening to audio</span><b id="m-audio">0%</b><i><u id="b-audio"></u></i></div>
       <div class="meter"><span>Writing transcript</span><b id="m-txt">0%</b><i><u id="b-txt"></u></i></div>
       <div class="meter"><span>Rendering clips</span><b id="m-clips">0%</b><i><u id="b-clips"></u></i></div>
-    </div>
+    </div></div>
     <p class="sum" id="sum" hidden></p>
     <ul class="log" id="log" aria-live="off"></ul>
   </section>
