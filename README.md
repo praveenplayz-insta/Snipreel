@@ -16,6 +16,16 @@ Everything runs in the visitor's browser, so hosting costs nothing.
 3. Leave the build command empty and set the publish directory to `.`
 4. Deploy. Netlify redeploys on every push to GitHub.
 
+## Smart brain (optional, free)
+Paste a free Gemini API key (aistudio.google.com) and optionally describe the video in "About this video".
+The brain then writes a YouTube title and description, an Instagram caption, hashtags for both, and a spoken
+intro that plays before each clip. The key is stored only in the visitor's browser. Only transcript text is sent to
+Google. Without a key a simple built-in writer is used, and the intro voice needs either a key or the "About this video" note.
+The intro voice runs in the browser: natural voice (Kokoro, about 90 MB) on desktop, a lighter voice on phones.
+
+## Video quality
+Choose Fast 540p or High 720p. Output is recorded in real time by the browser, so it cannot be better than the source footage.
+
 ## Add a caption theme
 Open `app.js`, find the `TH` object and add one line, for example:
 `gold:{up:1,on:'#ffd23f',off:'#fff',glow:'#ff9a1f'}`

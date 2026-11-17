@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="aurora"></div>
+<div class="aurora"></div><div class="sp"></div>
 <header class="top"><a class="logo" href="#"><i></i>Snipreel</a><nav><a href="#studio">Studio</a><a href="#how">How it works</a></nav></header>
 
 <section class="hero">
@@ -26,6 +26,7 @@
   </div></div>
 </section>
 
+<div class="ticker" aria-hidden="true"><div class="tk"><span>Auto clips</span><span>Word-by-word captions</span><span>Speaker tracking</span><span>Color grading</span><span>AI intro voice</span><span>Titles and hashtags</span><span>YouTube and Instagram</span><span>100% free</span><span>Auto clips</span><span>Word-by-word captions</span><span>Speaker tracking</span><span>Color grading</span><span>AI intro voice</span><span>Titles and hashtags</span><span>YouTube and Instagram</span><span>100% free</span></div></div>
 <main id="studio" class="studio">
   <h2>Studio</h2>
   <label class="drop" id="drop" tabindex="0">
@@ -36,10 +37,20 @@
     <div><h3>Color grade</h3><div class="chips" id="c-grade"></div></div>
     <div><h3>Caption style</h3><div class="chips" id="c-cap"></div></div>
     <div><h3>Clip length</h3><div class="chips" id="c-len"></div></div>
+    <div><h3>Video quality</h3><div class="chips" id="c-q"></div></div>
+  </div>
+  <div class="panel brain">
+    <h3>Smart brain <small>optional and free</small></h3>
+    <div class="bgrid">
+      <label>About this video<input id="ctx" type="text" maxlength="160" placeholder="e.g. MrBeast announces a new contest" autocomplete="off"></label>
+      <label>Gemini API key<input id="key" type="password" placeholder="Free key from aistudio.google.com" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <div class="chips" id="c-voice"></div>
+    <p class="hint">With a key, the brain writes a title, caption and hashtags for YouTube and Instagram, plus a spoken intro that sets up each clip. Only transcript text is sent to Google, never your video. The key stays in this browser. Google may use free-tier requests to improve its products.</p>
   </div>
   <button class="btn go" id="go" disabled>Make 5 clips</button>
   <ol class="steps" id="steps" hidden>
-    <li>Listening and transcribing</li><li>Choosing the best moments</li><li>Finding the speaker</li><li>Rendering clips</li>
+    <li>Listening and transcribing</li><li>Choosing the best moments</li><li>Writing titles and scripts</li><li>Finding the speaker</li><li>Rendering clips</li>
   </ol>
   <div class="bar" id="barw" hidden><i id="bar"></i></div>
   <p id="msg" role="status"></p>
