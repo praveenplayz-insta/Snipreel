@@ -3,7 +3,8 @@ const GR={natural:'none',cinema:'contrast(1.18) saturate(1.25) sepia(.18) hue-ro
 const DOT={natural:'#bbb',cinema:'#c9744a',vivid:'#ff3d81',warm:'#ffb347',cool:'#4cc9f0',noir:'#444'};
 const S={grade:'cinema',cap:'pop',len:30};let file=null,busy=false,face=null;
 const vid=document.createElement('video');vid.playsInline=true;vid.preload='auto';
-const pv=$('#pv'),pc=pv.getContext('2d'),W_=540,H_=960;
+const mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||matchMedia('(pointer:coarse)').matches;
+const W_=mobile?432:540,H_=mobile?768:960,pv=$('#pv'),pc=pv.getContext('2d');pv.width=W_;pv.height=H_;
 
 /* chips */
 function chips(id,key,items){const el=$(id);items.forEach(([v,l,d])=>{const b=document.createElement('button');b.className='chip';b.type='button';b.innerHTML=(d?`<i style="background:${d}"></i>`:'')+l;b.onclick=()=>{S[key]=v;sync()};b.dataset.v=v;el.append(b)});
@@ -24,9 +25,9 @@ const TH={
  ice:{on:'#8fe3ff',off:'#fff',glow:'#4cc9f0'},
  type:{font:'"Courier New",monospace',on:'#3ef2c1',off:'#fff',bar:'#000000b8'}};
 function caps(x,ws,t){if(!ws.length)return;let i=ws.findIndex(w=>t<w.e);if(i<0)i=ws.length-1;const g=Math.floor(i/3)*3,seg=ws.slice(g,g+3),T=TH[S.cap]||TH.pop;
- const txt=w=>T.up?w.w.toUpperCase():w.w,fam=T.font||'"Bricolage Grotesque",sans-serif',wt=T.font?700:800;let fs=62,sp=16,tw;
+ const txt=w=>T.up?w.w.toUpperCase():w.w,fam=T.font||'"Bricolage Grotesque",sans-serif',wt=T.font?700:800;const K=W_/540;let fs=62*K,sp=16*K,tw;
  const set=()=>{x.font=`${wt} ${fs}px ${fam}`;tw=seg.reduce((a,w)=>a+x.measureText(txt(w)).width,0)+sp*(seg.length-1)};
- set();if(tw>470){fs*=470/tw;sp*=470/tw;set()}
+ set();if(tw>470*K){fs*=470*K/tw;sp*=470*K/tw;set()}
  x.textBaseline='middle';x.textAlign='left';x.lineJoin='round';x.lineWidth=fs/5;let px=(W_-tw)/2;const y=H_*.72;
  if(T.bar){x.fillStyle=T.bar;x.beginPath();x.roundRect((W_-tw)/2-18,y-fs*.75,tw+36,fs*1.5,16);x.fill()}
  seg.forEach((w,k)=>{const on=g+k===i,s=txt(w),ww=x.measureText(s).width;x.shadowBlur=0;
@@ -35,7 +36,7 @@ function caps(x,ws,t){if(!ws.length)return;let i=ws.findIndex(w=>t<w.e);if(i<0)i
   if(!T.bar){x.strokeStyle='#000';x.strokeText(s,px,y)}
   x.fillStyle=on?T.on:T.off;if(T.glow&&on){x.shadowColor=T.glow;x.shadowBlur=24}x.fillText(s,px,y);x.shadowBlur=0;px+=ww+sp})}
 const DW='Hook them in the first three seconds'.split(' ').map((w,i)=>({w,s:i*.5,e:i*.5+.5}));
-function tick(n){if(!busy){const t=n/1000;if(!file){const g=pc.createLinearGradient(0,0,W_,H_);g.addColorStop(0,`hsl(${250+Math.sin(t)*25} 70% 28%)`);g.addColorStop(1,`hsl(${330+Math.cos(t*.8)*25} 75% 38%)`);pc.fillStyle=g;pc.fillRect(0,0,W_,H_);
+let lt=0;function tick(n){if(!busy&&n-lt>(mobile?90:30)){lt=n;const t=n/1000;if(!file){const g=pc.createLinearGradient(0,0,W_,H_);g.addColorStop(0,`hsl(${250+Math.sin(t)*25} 70% 28%)`);g.addColorStop(1,`hsl(${330+Math.cos(t*.8)*25} 75% 38%)`);pc.fillStyle=g;pc.fillRect(0,0,W_,H_);
  pc.fillStyle='#ffffff22';pc.beginPath();pc.arc(W_/2,330+Math.sin(t*1.3)*14,110,0,7);pc.fill();pc.fillRect(W_/2-150,450,300,420)}else if(vid.readyState>1)frame(pc,.5);caps(pc,DW,t%3.5)}requestAnimationFrame(tick)}
 requestAnimationFrame(tick);
 
@@ -50,19 +51,28 @@ drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDe
 drop.addEventListener('drop',e=>load(e.dataTransfer.files[0]));inp.onchange=()=>load(inp.files[0]);
 async function load(f){if(!f||!f.type.startsWith('video/'))return msg('That file is not a video. Choose an MP4, MOV or WebM file.');
  file=f;vid.src=URL.createObjectURL(f);await once(vid,'loadeddata');vid.currentTime=Math.min(1,vid.duration/2);
- $('#dt').textContent=f.name;$('#ds').textContent=`${(f.size/1048576).toFixed(0)} MB, ${fmt(vid.duration)} long. Choose another file to replace it.`;$('#go').disabled=false;msg('Ready. Pick your look, then make the clips.')}
+ $('#dt').textContent=f.name;$('#ds').textContent=`${(f.size/1048576).toFixed(0)} MB, ${fmt(vid.duration)} long. Choose another file to replace it.`;$('#go').disabled=false;msg(mobile&&vid.duration>600?'Ready. On a phone, videos under 10 minutes work best.':'Ready. Pick your look, then make the clips.')}
 const msg=t=>$('#msg').textContent=t,fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
 /* AI steps */
 async function initFace(){try{const v='0.10.14',m=await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/+esm`);const fs=await m.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/wasm`);
  face=await m.FaceDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'},runningMode:'VIDEO'})}catch(e){face=null}}
-async function transcribe(){const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm');
- const cb=p=>{if(p.status==='progress')msg(`Downloading speech model, ${Math.round(p.progress)}%. This only happens once.`)};
- let asr;try{asr=await pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{device:navigator.gpu?'webgpu':'wasm',progress_callback:cb})}catch(e){asr=await pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{device:'wasm',progress_callback:cb})}
- msg('Listening to the audio. Long videos take a few minutes.');
- const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer()),a=buf.getChannelData(0);
+let mp=0;
+async function loadASR(){const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm');
+ const mk=o=>pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{...o,progress_callback:p=>{if(p.status==='progress')mp=Math.round(p.progress)}});
+ if(mobile)return mk({device:'wasm',dtype:'q8'});try{return await mk({device:navigator.gpu?'webgpu':'wasm'})}catch(e){return mk({device:'wasm',dtype:'q8'})}}
+/* low-memory audio capture: plays the file silently and records 16 kHz mono, never loads the whole file into RAM */
+async function audioStream(rate,bar){const av=document.createElement('video');av.src=vid.src;av.playsInline=true;av.preload='auto';await once(av,'loadedmetadata');
+ const ac=new AudioContext({sampleRate:16000}),src=ac.createMediaElementSource(av),sp=ac.createScriptProcessor(4096,1,1),z=ac.createGain();z.gain.value=0;
+ const parts=[];sp.onaudioprocess=e=>parts.push(new Float32Array(e.inputBuffer.getChannelData(0)));src.connect(sp);sp.connect(z);z.connect(ac.destination);
+ av.playbackRate=rate;await ac.resume();await av.play();
+ await new Promise(res=>{const iv=setInterval(()=>{const p=av.currentTime/av.duration;bar(.02+p*.3);msg(`Listening to the audio, ${Math.round(p*100)}%. Keep this tab open and in front.`+(mp&&mp<100?` Speech model ${mp}%.`:''))},400);av.onended=()=>{clearInterval(iv);res()}});
+ ac.close();const n=parts.reduce((t,q)=>t+q.length,0),out=new Float32Array(n);let o=0;parts.forEach(q=>{out.set(q,o);o+=q.length});return out}
+async function transcribe(bar){const lp=loadASR();let a,rate=1;
+ try{if(mobile)throw 0;const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer());a=buf.getChannelData(0)}catch(e){rate=2;a=await audioStream(rate,bar)}
+ msg('Loading the speech model.');const asr=await lp;msg('Writing the transcript. Long videos take a few minutes.');
  const o=await asr(a,{return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
- return o.chunks.map(c=>({w:c.text.trim(),s:c.timestamp[0],e:c.timestamp[1]??c.timestamp[0]+.3})).filter(w=>w.w)}
+ return o.chunks.map(c=>({w:c.text.trim(),s:c.timestamp[0]*rate,e:(c.timestamp[1]??c.timestamp[0]+.3)*rate})).filter(w=>w.w)}
 function pick(W,len){const Sx=[];let cur=[];W.forEach((x,i)=>{cur.push(x);const n=W[i+1];if(/[.?!]$/.test(x.w)||(n&&n.s-x.e>.7)){Sx.push(cur);cur=[]}});if(cur.length)Sx.push(cur);
  const hook=/\b(secret|never|always|why|how|mistake|truth|biggest|best|worst|actually|imagine|stop|learn|money|free|nobody|everyone|important)\b/i,cand=[];
  for(let i=0;i<Sx.length;i++){let w=[];for(let j=i;j<Sx.length;j++){w=w.concat(Sx[j]);const d=w.at(-1).e-w[0].s;if(d>len*1.25)break;if(d<len*.6)continue;
@@ -85,9 +95,9 @@ async function render(c,prog){const cv=document.createElement('canvas');cv.width
 
 /* main flow */
 const step=i=>[...$('#steps').children].forEach((li,k)=>li.className=k<i?'done':k==i?'on':'');
-$('#go').onclick=async()=>{if(!file||busy)return;busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=false;$('#grid').innerHTML='';$('#recl').textContent='Rendering live';
+$('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return msg('This browser cannot export video. Use Chrome on Android or a desktop browser.');busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=false;$('#grid').innerHTML='';$('#recl').textContent='Rendering live';
  const bar=v=>$('#bar').style.width=Math.round(v*100)+'%';
- try{const fp=initFace();step(0);bar(.02);const W=await transcribe();if(W.length<10)throw Error('No clear speech was found in this video.');
+ try{const fp=initFace();step(0);bar(.02);const W=await transcribe(bar);if(W.length<10)throw Error('No clear speech was found in this video.');
   step(1);msg('Choosing the best moments.');const cl=pick(W,S.len);if(!cl.length)throw Error('Could not find a moment of that length. Try a shorter clip length.');
   cl.forEach((c,i)=>{c.el=document.createElement('article');c.el.className='card';c.el.innerHTML='<div class="vp sk"></div><div class="meta"><span class="score"></span><h4></h4><p></p></div>';
    c.el.querySelector('.score').textContent=`Hook score ${c.score}`;c.el.querySelector('h4').textContent=c.title;c.el.querySelector('p').textContent=`${fmt(c.s)} to ${fmt(c.e)}`;$('#grid').append(c.el)});
@@ -96,5 +106,5 @@ $('#go').onclick=async()=>{if(!file||busy)return;busy=true;$('#go').disabled=tru
    const r=await render(c,p=>bar((i+p)/cl.length));const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
    const a=document.createElement('a');a.className='btn sm';a.textContent='Download';a.href=r.url;a.download=`snipreel-clip-${i+1}.${r.ext}`;c.el.append(a)}
   step(4);bar(1);msg(face?'All clips are ready. Download the ones you like.':'Clips are ready, centered because face tracking could not load.')}
- catch(e){msg('Something went wrong: '+e.message+' Try Chrome on a desktop computer.')}
+ catch(e){msg(e.name==='NotReadableError'?'The browser lost access to the file. Choose it again from your phone storage (not Google Photos or Drive) and retry.':'Something went wrong: '+e.message)}
  busy=false;$('#go').disabled=false;$('#recl').textContent='Live preview'};
