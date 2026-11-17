@@ -122,3 +122,8 @@ footer{text-align:center;color:var(--mu);font-size:.9rem;padding:2rem 1rem 3rem;
 .liverow{display:flex;gap:1rem;align-items:flex-start}
 .liverow .meters{flex:1}
 #pv{display:none;width:96px;flex:none;border-radius:12px;border:1px solid var(--line)}
+
+/* hero fan sizes itself to its column so it never covers the text */
+.hero>*{min-width:0}
+.fanw{container-type:inline-size;width:100%;max-width:480px;justify-self:center}
+.fan{width:100%;--w:min(37cqw,215px);height:calc(var(--w)*1.78 + 60px)}

@@ -11,6 +11,7 @@ const DOT={natural:'#bbb',cinema:'#c9744a',vivid:'#ff3d81',warm:'#ffb347',cool:'
 const S={grade:'cinema',cap:'pop',len:30};let file=null,busy=false,face=null;
 const vid=document.createElement('video');vid.playsInline=true;vid.preload='auto';
 const mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||matchMedia('(pointer:coarse)').matches;
+const MODEL=mobile?'Xenova/whisper-tiny.en':'Xenova/whisper-base.en';
 const W_=mobile?432:540,H_=mobile?768:960,pv=$('#pv'),pc=pv.getContext('2d');pv.width=W_;pv.height=H_;
 
 /* chips */
@@ -69,9 +70,9 @@ function summary(W){const stop=new Set('the and but with this that was are have 
 async function loadASR(){const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm'),F={};
  const cb=p=>{if(p.status==='initiate')log('Fetching '+String(p.file).split('/').pop());
   if(p.status==='progress'&&p.total){F[p.file]={l:p.loaded,t:p.total};const v=Object.values(F);setM('model',v.reduce((a,x)=>a+x.l,0)/v.reduce((a,x)=>a+x.t,0))}};
- const mk=o=>pipeline('automatic-speech-recognition','Xenova/whisper-base.en',{...o,progress_callback:cb});let r;
+ const mk=o=>pipeline('automatic-speech-recognition',MODEL,{...o,progress_callback:cb});let r;
  if(mobile)r=await mk({device:'wasm',dtype:'q8'});else{try{r=await mk(navigator.gpu?{device:'webgpu',dtype:{encoder_model:'fp32',decoder_model_merged:'q4'}}:{device:'wasm',dtype:'q8'})}catch(e){log('GPU mode failed, switching to CPU');r=await mk({device:'wasm',dtype:'q8'})}}
- setM('model',1);log('Speech model ready');return r}
+ setM('model',1);log('Speech model ready ('+MODEL.split('/')[1]+')');return r}
 /* low-memory audio capture: plays the file silently and records 16 kHz mono, never loads the whole file into RAM */
 async function audioStream(rate,bar){const av=document.createElement('video');av.src=vid.src;av.playsInline=true;av.preload='auto';
  av.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';document.body.append(av);
@@ -92,12 +93,22 @@ function clean(W,a,rate){const out=[];let run=0,prev='';
   run=k===prev?run+1:1;prev=k;if(run>3)continue;
   let e=x.e;if(e-x.s>1.5)e=x.s+.6;if(e<=x.s)e=x.s+.2;out.push({w:x.w,s:x.s*rate,e:e*rate})}
  if(out.length<W.length)log(`Removed ${W.length-out.length} doubtful words (loops or silence)`);return out}
-async function transcribe(bar){const lp=loadASR();let a,rate=1;
+/* split audio into <=30 s parts, cutting at the quietest moment so words are not sliced */
+function splits(a){const R=16000,out=[];let p=0;while(p<a.length){let q=Math.min(a.length,p+30*R);
+ if(q<a.length){let best=q,bv=1e9;for(let i=q-6*R;i<q-1600;i+=1600){let t=0;for(let j=i;j<i+1600;j+=8)t+=Math.abs(a[j]);if(t<bv){bv=t;best=i+800}}q=best}out.push([p,q]);p=q}return out}
+const nap=ms=>new Promise(r=>setTimeout(r,ms));
+async function transcribe(bar){
+ const key=`snipreel:v2:${file.name}:${file.size}:${MODEL}`;
+ try{const c=JSON.parse(localStorage.getItem(key)||'null');if(c&&c.length>10){log('Found a saved transcript for this video, skipping the audio and transcription steps');['audio','model','txt'].forEach(k=>setM(k,1));return c}}catch(e){}
+ const lp=loadASR();let a,rate=1;
  try{if(mobile)throw 0;log('Decoding audio on this device');const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer());a=buf.getChannelData(0);setM('audio',1)}catch(e){rate=vid.duration>300?1.5:1;log('Using low-memory audio capture');a=await audioStream(rate,bar)}
- msg('Loading the speech model.');const asr=await lp;const ib=$('#b-txt').parentElement;ib.classList.add('ind');
- log('Transcribing speech. This is the slowest step and has no percentage, but the timer above keeps running.');msg('Writing the transcript. This can take a few minutes.');
- const opt={return_timestamps:'word',chunk_length_s:30,stride_length_s:5};let o;try{o=await asr(a,{...opt,no_repeat_ngram_size:4})}catch(e){log('Retrying transcription with default settings');o=await asr(a,opt)}ib.classList.remove('ind');setM('txt',1);
- return clean(o.chunks.map(c=>({w:c.text.trim(),s:c.timestamp[0],e:c.timestamp[1]??c.timestamp[0]+.3})).filter(w=>w.w),a,rate)}
+ msg('Loading the speech model.');const asr=await lp;
+ const segs=splits(a),words=[];log(`Transcribing in ${segs.length} parts`);
+ for(let i=0;i<segs.length;i++){const [p,q]=segs[i];msg(`Writing the transcript, part ${i+1} of ${segs.length}.`);bar(.32+.3*i/segs.length);
+  let o;try{o=await asr(a.slice(p,q),{return_timestamps:'word',no_repeat_ngram_size:4})}catch(e){try{o=await asr(a.slice(p,q),{return_timestamps:'word'})}catch(e2){log(`Part ${i+1} failed, skipping it`);continue}}
+  const off=p/16000;(o.chunks||[]).forEach(c=>{const w=c.text.trim();if(w)words.push({w,s:c.timestamp[0]+off,e:(c.timestamp[1]??c.timestamp[0]+.3)+off})});
+  setM('txt',(i+1)/segs.length);log(`Transcribed part ${i+1} of ${segs.length}, ${words.length} words so far`);await nap(40)}
+ const out=clean(words,a,rate);try{localStorage.setItem(key,JSON.stringify(out))}catch(e){}return out}
 function pick(W,len){const Sx=[];let cur=[];W.forEach((x,i)=>{cur.push(x);const n=W[i+1];if(/[.?!]$/.test(x.w)||(n&&n.s-x.e>.7)){Sx.push(cur);cur=[]}});if(cur.length)Sx.push(cur);
  const hook=/\b(secret|never|always|why|how|mistake|truth|biggest|best|worst|actually|imagine|stop|learn|money|free|nobody|everyone|important)\b/i,cand=[];
  for(let i=0;i<Sx.length;i++){let w=[];for(let j=i;j<Sx.length;j++){w=w.concat(Sx[j]);const d=w.at(-1).e-w[0].s;if(d>len*1.25)break;if(d<len*.6)continue;
@@ -125,7 +136,7 @@ async function render(c,prog){const cv=document.createElement('canvas');cv.width
  vid.pause();rec.stop();await done;pv.style.display='none';return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
 
 /* main flow */
-const STG=['Listening to the audio','Choosing the best moments','Finding the speaker','Rendering clips','All done'];
+const STG=['Listening and transcribing','Choosing the best moments','Finding the speaker','Rendering clips','All done'];
 const step=i=>{$('#stage').textContent=STG[i];log(STG[i]);[...$('#steps').children].forEach((li,k)=>li.className=k<i?'done':k==i?'on':'')};
 $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return msg('This browser cannot export video. Use Chrome on Android or a desktop browser.');busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=$('#live').hidden=false;$('#sum').hidden=true;$('#log').innerHTML='';['model','audio','txt','clips'].forEach(k=>setM(k,0));t0=Date.now();clearInterval(tk);tk=setInterval(()=>$('#elapsed').textContent=fmt((Date.now()-t0)/1000),1000);log('Started');$('#grid').innerHTML='';
  const bar=v=>$('#bar').style.width=Math.round(v*100)+'%';
