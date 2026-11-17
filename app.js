@@ -57,21 +57,37 @@ const msg=t=>$('#msg').textContent=t,fmt=s=>`${Math.floor(s/60)}:${String(Math.f
 /* AI steps */
 async function initFace(){try{const v='0.10.14',m=await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/+esm`);const fs=await m.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/wasm`);
  face=await m.FaceDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'},runningMode:'VIDEO'})}catch(e){face=null}}
-let mp=0;
-async function loadASR(){const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm');
- const mk=o=>pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{...o,progress_callback:p=>{if(p.status==='progress')mp=Math.round(p.progress)}});
- if(mobile)return mk({device:'wasm',dtype:'q8'});try{return await mk({device:navigator.gpu?'webgpu':'wasm'})}catch(e){return mk({device:'wasm',dtype:'q8'})}}
+let t0=0,tk=0;
+function log(t){const li=document.createElement('li');li.textContent=`${fmt((Date.now()-t0)/1000)}  ${t}`;const l=$('#log');l.prepend(li);while(l.children.length>60)l.lastChild.remove()}
+function setM(id,p){$('#m-'+id).textContent=Math.round(p*100)+'%';$('#b-'+id).style.width=Math.round(p*100)+'%'}
+function summary(W){const stop=new Set('the and but with this that was are have has had does did what which who how can will just like then there their about into more very your our its them than also when out all one because they would could should really going know think want right yeah okay'.split(' ')),f={};
+ W.forEach(x=>{const k=x.w.toLowerCase().replace(/[^a-z']/g,'');if(k.length>3&&!stop.has(k))f[k]=(f[k]||0)+1});
+ const top=Object.entries(f).sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]),el=$('#sum');el.hidden=false;
+ el.textContent=`Transcript summary: ${W.length} words over ${fmt(W.at(-1).e)}. Main topics: ${top.join(', ')||'none detected'}. It starts with: “${W.slice(0,14).map(x=>x.w).join(' ')}…”`}
+async function loadASR(){const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm'),F={};
+ const cb=p=>{if(p.status==='initiate')log('Fetching '+String(p.file).split('/').pop());
+  if(p.status==='progress'&&p.total){F[p.file]={l:p.loaded,t:p.total};const v=Object.values(F);setM('model',v.reduce((a,x)=>a+x.l,0)/v.reduce((a,x)=>a+x.t,0))}};
+ const mk=o=>pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{...o,progress_callback:cb});let r;
+ if(mobile)r=await mk({device:'wasm',dtype:'q8'});else{try{r=await mk({device:navigator.gpu?'webgpu':'wasm'})}catch(e){log('GPU mode failed, switching to CPU');r=await mk({device:'wasm',dtype:'q8'})}}
+ setM('model',1);log('Speech model ready');return r}
 /* low-memory audio capture: plays the file silently and records 16 kHz mono, never loads the whole file into RAM */
-async function audioStream(rate,bar){const av=document.createElement('video');av.src=vid.src;av.playsInline=true;av.preload='auto';await once(av,'loadedmetadata');
+async function audioStream(rate,bar){const av=document.createElement('video');av.src=vid.src;av.playsInline=true;av.preload='auto';
+ av.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';document.body.append(av);
+ await once(av,'loadedmetadata');log(`Audio source opened, ${fmt(av.duration)} long, reading at ${rate}x speed`);
  const ac=new AudioContext({sampleRate:16000}),src=ac.createMediaElementSource(av),sp=ac.createScriptProcessor(4096,1,1),z=ac.createGain();z.gain.value=0;
  const parts=[];sp.onaudioprocess=e=>parts.push(new Float32Array(e.inputBuffer.getChannelData(0)));src.connect(sp);sp.connect(z);z.connect(ac.destination);
- av.playbackRate=rate;await ac.resume();await av.play();
- await new Promise(res=>{const iv=setInterval(()=>{const p=av.currentTime/av.duration;bar(.02+p*.3);msg(`Listening to the audio, ${Math.round(p*100)}%. Keep this tab open and in front.`+(mp&&mp<100?` Speech model ${mp}%.`:''))},400);av.onended=()=>{clearInterval(iv);res()}});
- ac.close();const n=parts.reduce((t,q)=>t+q.length,0),out=new Float32Array(n);let o=0;parts.forEach(q=>{out.set(q,o);o+=q.length});return out}
+ av.playbackRate=rate;await ac.resume();await av.play();log('Playback started');
+ await new Promise(res=>{let last=-1,still=0,lg=0;const fin=w=>{clearInterval(iv);log(w);res()};
+  const iv=setInterval(()=>{const p=Math.min(1,av.currentTime/av.duration);setM('audio',p);bar(.02+p*.3);msg(`Listening to the audio, ${Math.round(p*100)}%.`);
+   if(Math.floor(p*5)>lg){lg=Math.floor(p*5);log(`Listening, ${lg*20}%`)}
+   if(av.ended||av.duration-av.currentTime<.3)return fin('Audio captured');
+   if(av.currentTime===last){still++;if(still===6){log('Playback stalled, nudging it');av.play().catch(()=>{})}if(still>=30)return fin('Playback stopped early, using the audio captured so far')}else{still=0;last=av.currentTime}},500)});
+ setM('audio',1);ac.close();av.remove();const n=parts.reduce((t,q)=>t+q.length,0),out=new Float32Array(n);let o=0;parts.forEach(q=>{out.set(q,o);o+=q.length});return out}
 async function transcribe(bar){const lp=loadASR();let a,rate=1;
- try{if(mobile)throw 0;const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer());a=buf.getChannelData(0)}catch(e){rate=2;a=await audioStream(rate,bar)}
- msg('Loading the speech model.');const asr=await lp;msg('Writing the transcript. Long videos take a few minutes.');
- const o=await asr(a,{return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
+ try{if(mobile)throw 0;log('Decoding audio on this device');const ac=new AudioContext({sampleRate:16000}),buf=await ac.decodeAudioData(await file.arrayBuffer());a=buf.getChannelData(0);setM('audio',1)}catch(e){rate=2;log('Using low-memory audio capture');a=await audioStream(rate,bar)}
+ msg('Loading the speech model.');const asr=await lp;const ib=$('#b-txt').parentElement;ib.classList.add('ind');
+ log('Transcribing speech. This is the slowest step and has no percentage, but the timer above keeps running.');msg('Writing the transcript. This can take a few minutes.');
+ const o=await asr(a,{return_timestamps:'word',chunk_length_s:30,stride_length_s:5});ib.classList.remove('ind');setM('txt',1);
  return o.chunks.map(c=>({w:c.text.trim(),s:c.timestamp[0]*rate,e:(c.timestamp[1]??c.timestamp[0]+.3)*rate})).filter(w=>w.w)}
 function pick(W,len){const Sx=[];let cur=[];W.forEach((x,i)=>{cur.push(x);const n=W[i+1];if(/[.?!]$/.test(x.w)||(n&&n.s-x.e>.7)){Sx.push(cur);cur=[]}});if(cur.length)Sx.push(cur);
  const hook=/\b(secret|never|always|why|how|mistake|truth|biggest|best|worst|actually|imagine|stop|learn|money|free|nobody|everyone|important)\b/i,cand=[];
@@ -94,17 +110,18 @@ async function render(c,prog){const cv=document.createElement('canvas');cv.width
  vid.pause();rec.stop();await done;return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
 
 /* main flow */
-const step=i=>[...$('#steps').children].forEach((li,k)=>li.className=k<i?'done':k==i?'on':'');
-$('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return msg('This browser cannot export video. Use Chrome on Android or a desktop browser.');busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=false;$('#grid').innerHTML='';$('#recl').textContent='Rendering live';
+const STG=['Listening to the audio','Choosing the best moments','Finding the speaker','Rendering clips','All done'];
+const step=i=>{$('#stage').textContent=STG[i];log(STG[i]);[...$('#steps').children].forEach((li,k)=>li.className=k<i?'done':k==i?'on':'')};
+$('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return msg('This browser cannot export video. Use Chrome on Android or a desktop browser.');busy=true;$('#go').disabled=true;$('#steps').hidden=$('#barw').hidden=$('#live').hidden=false;$('#sum').hidden=true;$('#log').innerHTML='';['model','audio','txt','clips'].forEach(k=>setM(k,0));t0=Date.now();clearInterval(tk);tk=setInterval(()=>$('#elapsed').textContent=fmt((Date.now()-t0)/1000),1000);log('Started');$('#grid').innerHTML='';$('#recl').textContent='Rendering live';
  const bar=v=>$('#bar').style.width=Math.round(v*100)+'%';
  try{const fp=initFace();step(0);bar(.02);const W=await transcribe(bar);if(W.length<10)throw Error('No clear speech was found in this video.');
-  step(1);msg('Choosing the best moments.');const cl=pick(W,S.len);if(!cl.length)throw Error('Could not find a moment of that length. Try a shorter clip length.');
+  log(`Transcript ready, ${W.length} words`);summary(W);step(1);msg('Choosing the best moments.');const cl=pick(W,S.len);if(!cl.length)throw Error('Could not find a moment of that length. Try a shorter clip length.');
   cl.forEach((c,i)=>{c.el=document.createElement('article');c.el.className='card';c.el.innerHTML='<div class="vp sk"></div><div class="meta"><span class="score"></span><h4></h4><p></p></div>';
    c.el.querySelector('.score').textContent=`Hook score ${c.score}`;c.el.querySelector('h4').textContent=c.title;c.el.querySelector('p').textContent=`${fmt(c.s)} to ${fmt(c.e)}`;$('#grid').append(c.el)});
-  step(2);msg('Loading face tracking.');await fp;step(3);
-  for(let i=0;i<cl.length;i++){const c=cl[i];msg(`Rendering clip ${i+1} of ${cl.length}. Keep this tab open and in front.`);
-   const r=await render(c,p=>bar((i+p)/cl.length));const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
+  step(2);msg('Loading face tracking.');await fp;log(face?'Face tracking ready':'Face tracking unavailable, using a centered crop');step(3);
+  for(let i=0;i<cl.length;i++){const c=cl[i];msg(`Rendering clip ${i+1} of ${cl.length}. Keep this tab open and in front.`);log(`Rendering clip ${i+1} of ${cl.length}`);
+   const r=await render(c,p=>{bar((i+p)/cl.length);setM('clips',(i+p)/cl.length)});log(`Clip ${i+1} ready`);const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
    const a=document.createElement('a');a.className='btn sm';a.textContent='Download';a.href=r.url;a.download=`snipreel-clip-${i+1}.${r.ext}`;c.el.append(a)}
-  step(4);bar(1);msg(face?'All clips are ready. Download the ones you like.':'Clips are ready, centered because face tracking could not load.')}
- catch(e){msg(e.name==='NotReadableError'?'The browser lost access to the file. Choose it again from your phone storage (not Google Photos or Drive) and retry.':'Something went wrong: '+e.message)}
- busy=false;$('#go').disabled=false;$('#recl').textContent='Live preview'};
+  step(4);bar(1);setM('clips',1);log('Finished');msg(face?'All clips are ready. Download the ones you like.':'Clips are ready, centered because face tracking could not load.')}
+ catch(e){log('Stopped: '+(e.message||e.name));msg(e.name==='NotReadableError'?'The browser lost access to the file. Choose it again from your phone storage (not Google Photos or Drive) and retry.':'Something went wrong: '+e.message)}
+ busy=false;clearInterval(tk);$('#go').disabled=false;$('#recl').textContent='Live preview'};

@@ -39,6 +39,17 @@
   </ol>
   <div class="bar" id="barw" hidden><i id="bar"></i></div>
   <p id="msg" role="status"></p>
+  <section class="panel live" id="live" hidden>
+    <div class="lh"><h3>Live activity</h3><span>Now: <b id="stage">Starting</b></span><span>Elapsed <b id="elapsed">0:00</b></span></div>
+    <div class="meters">
+      <div class="meter"><span>Speech model download</span><b id="m-model">0%</b><i><u id="b-model"></u></i></div>
+      <div class="meter"><span>Listening to audio</span><b id="m-audio">0%</b><i><u id="b-audio"></u></i></div>
+      <div class="meter"><span>Writing transcript</span><b id="m-txt">0%</b><i><u id="b-txt"></u></i></div>
+      <div class="meter"><span>Rendering clips</span><b id="m-clips">0%</b><i><u id="b-clips"></u></i></div>
+    </div>
+    <p class="sum" id="sum" hidden></p>
+    <ul class="log" id="log" aria-live="off"></ul>
+  </section>
   <section class="grid" id="grid"></section>
 </main>
 
