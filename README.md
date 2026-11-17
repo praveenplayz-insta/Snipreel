@@ -23,6 +23,20 @@ intro that plays before each clip. The key is stored only in the visitor's brows
 Google. Without a key a simple built-in writer is used, and the intro voice needs either a key or the "About this video" note.
 The intro voice runs in the browser: natural voice (Kokoro, about 90 MB) on desktop, a lighter voice on phones.
 
+## Sound effects
+Off, Subtle, Normal or Hype. A plan is made from the transcript (money words, shock words, wins, fails, questions, long pauses)
+and the sounds are synthesised with the Web Audio API, so there are no audio files and no licensing issues.
+Add or change sounds in `playSfx()` and the word lists in `sfxPlan()` in `app.js`.
+
+## Formats and framing
+Choose 9:16 (Shorts, Reels, TikTok), 1:1, 4:5 or 16:9, and clip lengths from 15 s up to 3 min.
+Smart crop follows the speaker; Fit with blur keeps the whole frame on a blurred background.
+
+## Brain engines
+- Smart basic: instant, no key, no download.
+- On-device AI: small free model in the browser (about 0.5 GB once, desktop).
+- Gemini: best quality, free key.
+
 ## Video quality
 Choose Fast 540p or High 720p. Output is recorded in real time by the browser, so it cannot be better than the source footage.
 

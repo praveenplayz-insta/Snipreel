@@ -38,15 +38,25 @@
     <div><h3>Caption style</h3><div class="chips" id="c-cap"></div></div>
     <div><h3>Clip length</h3><div class="chips" id="c-len"></div></div>
     <div><h3>Video quality</h3><div class="chips" id="c-q"></div></div>
+    <div><h3>Format</h3><div class="chips" id="c-ar"></div></div>
+    <div><h3>Framing</h3><div class="chips" id="c-fit"></div></div>
   </div>
+  <p class="hint">Clips are recorded in real time, so a 3 minute clip takes about 3 minutes to export. Smart crop follows the speaker. Fit with blur keeps the whole frame on a blurred background.</p>
   <div class="panel brain">
     <h3>Smart brain <small>optional and free</small></h3>
     <div class="bgrid">
-      <label>About this video<input id="ctx" type="text" maxlength="160" placeholder="e.g. MrBeast announces a new contest" autocomplete="off"></label>
+      <label>What the voice says first (optional)<input id="ctx" type="text" maxlength="160" placeholder="e.g. MrBeast has made a new contest" autocomplete="off"></label>
       <label>Gemini API key<input id="key" type="password" placeholder="Free key from aistudio.google.com" autocomplete="off" spellcheck="false"></label>
     </div>
-    <div class="chips" id="c-voice"></div>
-    <p class="hint">With a key, the brain writes a title, caption and hashtags for YouTube and Instagram, plus a spoken intro that sets up each clip. Only transcript text is sent to Google, never your video. The key stays in this browser. Google may use free-tier requests to improve its products.</p>
+    <h3 class="sub">Brain engine</h3><div class="chips" id="c-brain"></div>
+    <h3 class="sub">Intro voice</h3><div class="chips" id="c-voice"></div>
+    <p class="hint">Smart basic works instantly with no download and no key. It writes titles and hashtags from the transcript and builds the intro from rule-like sentences it finds anywhere in the video. On-device AI writes more natural copy with no key, but needs a one-time download of about 0.5 GB and is meant for desktop. Gemini (free key from aistudio.google.com) writes the best copy and sends only transcript text to Google, never your video; Google may use free-tier requests to improve its products. The key stays in this browser.</p>
+  </div>
+  <div class="panel brain sfxp">
+    <h3>Sound effects <small>made in your browser, free and royalty free</small></h3>
+    <div class="chips" id="c-sfx"></div>
+    <h3 class="sub">Tap to hear them</h3><div class="chips" id="prev"></div>
+    <p class="hint">The AI reads the transcript and adds a whoosh at transitions and long pauses, a cash sound on money and numbers, a boom on shock words, cheers on wins, a sad tune on fails and a soft ding on questions. Subtle uses fewer and skips the small ones. Effects are simple synthesised sounds, not studio recordings.</p>
   </div>
   <button class="btn go" id="go" disabled>Make 5 clips</button>
   <ol class="steps" id="steps" hidden>
