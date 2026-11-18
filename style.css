@@ -210,3 +210,5 @@ footer{text-align:center;color:var(--mu);font-size:.9rem;padding:2rem 1rem 3rem;
 @media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none}.tk{animation:none}}
 
 .brain h3.sub{font:700 .95rem "DM Sans",sans-serif;color:var(--mu);margin:1rem 0 .5rem}
+
+.crash{background:#ff5c9320;border:1px solid var(--rose);border-radius:14px;padding:.8rem 1rem;cursor:pointer;font-size:.95rem}

@@ -12,7 +12,7 @@ const S={grade:'cinema',cap:'pop',len:30,voice:'on',ar:'9:16',frm:'crop',brain:'
 const vid=document.createElement('video');vid.playsInline=true;vid.preload='auto';
 const mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||matchMedia('(pointer:coarse)').matches;
 const MODEL=mobile?'Xenova/whisper-tiny.en':'Xenova/whisper-base.en';
-S.q=mobile?'fast':'high';let W_=540,H_=960;const pv=$('#pv'),pc=pv.getContext('2d');
+S.q=mobile?'fast':'high';if(mobile)S.voice='off';let W_=540,H_=960;const pv=$('#pv'),pc=pv.getContext('2d');
 const SZ={'9:16':{high:[720,1280],fast:[540,960]},'1:1':{high:[1080,1080],fast:[720,720]},'4:5':{high:[864,1080],fast:[576,720]},'16:9':{high:[1280,720],fast:[960,540]}};
 function setSize(){[W_,H_]=SZ[S.ar||'9:16'][S.q==='high'?'high':'fast'];pv.width=W_;pv.height=H_}setSize();
 
@@ -20,7 +20,7 @@ function setSize(){[W_,H_]=SZ[S.ar||'9:16'][S.q==='high'?'high':'fast'];pv.width
 function chips(id,key,items){const el=$(id);items.forEach(([v,l,d])=>{const b=document.createElement('button');b.className='chip';b.type='button';b.innerHTML=(d?`<i style="background:${d}"></i>`:'')+l;b.onclick=()=>{S[key]=v;sync()};b.dataset.v=v;el.append(b)});
  el.sync=()=>[...el.children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==S[key])));return el}
 const cs=[chips('#c-grade','grade',Object.keys(GR).map(k=>[k,k[0].toUpperCase()+k.slice(1),DOT[k]])),chips('#c-cap','cap',[['pop','Pop'],['clean','Clean'],['neon','Neon'],['box','Highlight box'],['comic','Comic'],['fire','Fire'],['ice','Ice'],['type','Typewriter']]),chips('#c-len','len',[[15,'15s'],[30,'30s'],[45,'45s'],[60,'60s'],[90,'90s'],[120,'2 min'],[180,'3 min']])];
-cs.push(chips('#c-voice','voice',[['on','Intro voice on'],['off','Intro voice off']]),chips('#c-q','q',[['fast','Fast'],['high','High']]),chips('#c-ar','ar',[['9:16','9:16 Shorts'],['1:1','1:1 Square'],['4:5','4:5 Feed'],['16:9','16:9 YouTube']]),chips('#c-fit','frm',[['crop','Smart crop'],['fit','Fit with blur']]),chips('#c-brain','brain',[['smart','Smart basic'],['local','On-device AI'],['gemini','Gemini']]),chips('#c-sfx','sfx',[['off','Off'],['subtle','Subtle'],['normal','Normal'],['hype','Hype']]));const sync=()=>cs.forEach(c=>c.sync());sync();
+cs.push(chips('#c-voice','voice',[['on','Intro voice on'],['off','Intro voice off']]),chips('#c-q','q',[['fast','Fast'],['high','High']]),chips('#c-ar','ar',[['9:16','9:16 Shorts'],['1:1','1:1 Square'],['4:5','4:5 Feed'],['16:9','16:9 YouTube']]),chips('#c-fit','frm',[['crop','Smart crop'],['fit','Fit with blur']]),chips('#c-brain','brain',[['smart','Smart basic'],['local','On-device AI (0.5 GB)'],['gemini','Gemini']]),chips('#c-sfx','sfx',[['off','Off'],['subtle','Subtle'],['normal','Normal'],['hype','Hype']]));const sync=()=>cs.forEach(c=>c.sync());sync();
 
 /* drawing */
 let bgc=null;
@@ -68,6 +68,7 @@ const msg=t=>$('#msg').textContent=t,fmt=s=>`${Math.floor(s/60)}:${String(Math.f
 /* AI steps */
 async function initFace(){try{const v='0.10.14',m=await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/+esm`);const fs=await m.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/wasm`);
  face=await m.FaceDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'},runningMode:'VIDEO',minDetectionConfidence:.3})}catch(e){face=null}}
+function crumb(x){try{x?localStorage.setItem('snipreel:crumb',x+'|'+Date.now()):localStorage.removeItem('snipreel:crumb')}catch(e){}}
 let t0=0,tk=0;
 function log(t){const li=document.createElement('li');li.textContent=`${fmt((Date.now()-t0)/1000)}  ${t}`;const l=$('#log');l.prepend(li);while(l.children.length>60)l.lastChild.remove()}
 function setM(id,p){$('#m-'+id).textContent=Math.round(p*100)+'%';$('#b-'+id).style.width=Math.round(p*100)+'%'}
@@ -115,15 +116,15 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
 async function transcribe(bar){
  const key=`snipreel:v2:${file.name}:${file.size}:${MODEL}`;
  try{const c=JSON.parse(localStorage.getItem(key)||'null');if(c&&c.length>10){log('Found a saved transcript for this video, skipping the audio and transcription steps');['audio','model','txt'].forEach(k=>setM(k,1));return c}}catch(e){}
- const lp=loadASR();let a,rate=1;
+ crumb('listening');const lp=loadASR();let a,rate=1;
  try{log('Decoding the audio straight from the file');a=await decodeAll();setM('audio',1);bar(.3);log(`Audio decoded, ${fmt(a.length/16000)} of sound`)}catch(e){rate=vid.duration>300?1.5:1;log(`Direct decoding failed (${e.name||e.message}). Listening in real time instead.`);a=await audioStream(rate,bar)}
  msg('Loading the speech model.');const asr=await lp;
- const segs=splits(a),words=[];log(`Transcribing in ${segs.length} parts`);
+ crumb('transcribing');const segs=splits(a),words=[];log(`Transcribing in ${segs.length} parts`);
  for(let i=0;i<segs.length;i++){const [p,q]=segs[i];msg(`Writing the transcript, part ${i+1} of ${segs.length}.`);bar(.32+.3*i/segs.length);
   let o;try{o=await asr(a.slice(p,q),{return_timestamps:'word',no_repeat_ngram_size:4})}catch(e){try{o=await asr(a.slice(p,q),{return_timestamps:'word'})}catch(e2){log(`Part ${i+1} failed, skipping it`);continue}}
   const off=p/16000;(o.chunks||[]).forEach(c=>{const w=c.text.trim();if(w)words.push({w,s:c.timestamp[0]+off,e:(c.timestamp[1]??c.timestamp[0]+.3)+off})});
   setM('txt',(i+1)/segs.length);log(`Transcribed part ${i+1} of ${segs.length}, ${words.length} words so far`);await nap(40)}
- const out=clean(words,a,rate);try{localStorage.setItem(key,JSON.stringify(out))}catch(e){}return out}
+ try{await asr.dispose()}catch(e){}log('Speech model released to free memory');const out=clean(words,a,rate);try{localStorage.setItem(key,JSON.stringify(out))}catch(e){}return out}
 function pick(W,len){const n=W.length;if(n<5)return[];
  const E=/[.?!]$/,gp=i=>(W[i+1]?W[i+1].s-W[i].e:3),gb=i=>(i>0?W[i].s-W[i-1].e:3);
  const sOK=i=>i===0||E.test(W[i-1].w)||gb(i)>.45,eOK=i=>i===n-1||E.test(W[i].w)||gp(i)>.5;
@@ -229,9 +230,9 @@ async function gemini(key,prompt){const base='https://generativelanguage.googlea
   if(!r.ok){log(`Brain model ${n.split('/')[1]} answered ${r.status}, trying the next one`);continue}
   const d=await r.json(),t=(d.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');try{return JSON.parse(t.replace(/^\s*```(?:json)?|```\s*$/g,'').trim())}catch(e){log('Brain answer was not valid JSON, trying the next model')}}
  throw Error('The brain could not produce an answer.')}
-async function runBrain(cl,W){SENTS=sentencesOf(W);SUBJ=detectSubject(W);if(SUBJ.name||SUBJ.topic)log(`Brain: the video seems to be about ${[SUBJ.name,SUBJ.topic].filter(Boolean).join(' and ')}`);const note=ctxEl.value.trim(),key=keyEl.value.trim(),kt=keyLines().map(x=>x.t).join(' ').slice(0,700);let res=null;
+async function runBrain(cl,W){SENTS=sentencesOf(W);SUBJ=detectSubject(W);if(S.brain==='local'&&(mobile||(navigator.deviceMemory||8)<4)){log('On-device AI is too heavy for this device. Using Smart basic instead.');S.brain='smart';sync()}if(SUBJ.name||SUBJ.topic)log(`Brain: the video seems to be about ${[SUBJ.name,SUBJ.topic].filter(Boolean).join(' and ')}`);const note=ctxEl.value.trim(),key=keyEl.value.trim(),kt=keyLines().map(x=>x.t).join(' ').slice(0,700);let res=null;
  if(S.brain==='gemini'){if(!key)log('Brain: Gemini needs a key. Using Smart basic instead.');else{try{log('Brain: asking Gemini for titles, captions, hashtags and intro scripts');const j=await gemini(key,brainPrompt(cl,note,kt));const arr=Array.isArray(j)?j:j.clips;if(Array.isArray(arr))res=arr}catch(e){log('Brain: '+e.message+' Using Smart basic instead.')}}}
- else if(S.brain==='local'){try{res=[];for(let i=0;i<cl.length;i++){msg(`The on-device brain is writing for clip ${i+1} of ${cl.length}.`);log(`On-device brain: writing for clip ${i+1}`);res.push(await localLLM(cl[i],note,kt));await nap(30)}}catch(e){log('On-device brain failed ('+(e.message||e)+'). Using Smart basic instead.');res=null}}
+ else if(S.brain==='local'){crumb('brainlocal');try{res=[];for(let i=0;i<cl.length;i++){msg(`The on-device brain is writing for clip ${i+1} of ${cl.length}.`);log(`On-device brain: writing for clip ${i+1}`);res.push(await localLLM(cl[i],note,kt));await nap(30)}}catch(e){log('On-device brain failed ('+(e.message||e)+'). Using Smart basic instead.');res=null}}
  else log('Brain: Smart basic, instant and no download');
  cl.forEach((c,i)=>{const L=localBrain(c,note),R=(res&&res[i])||{};c.meta={};for(const k in L){const v=R[k];c.meta[k]=(v&&(Array.isArray(v)?v.length:String(v).trim()))?v:L[k]}c.meta.smart=!!(res&&res[i])})}
 function fillMeta(c){const m=c.meta,H=t=>norm(t).join(' ');
@@ -247,7 +248,7 @@ let tts=null,ttsKind='';
 async function loadTTS(){if(tts)return;
  if(!mobile){try{log('Loading the natural voice model, about 90 MB the first time');const {KokoroTTS}=await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm');
   tts=await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX',{dtype:'q8',device:'wasm'});ttsKind='kokoro';log('Natural voice ready');return}catch(e){log('Natural voice could not load, switching to the light voice')}}
- log('Loading the light voice model');const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm');tts=await pipeline('text-to-speech','Xenova/mms-tts-eng');ttsKind='mms';log('Light voice ready')}
+ log('Loading the light voice model');const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm');try{tts=await pipeline('text-to-speech','Xenova/mms-tts-eng',{dtype:'q8'})}catch(e){tts=await pipeline('text-to-speech','Xenova/mms-tts-eng')}ttsKind='mms';log('Light voice ready')}
 async function speak(text){await loadTTS();const o=ttsKind==='kokoro'?await tts.generate(text,{voice:'af_heart'}):await tts(text);
  const d=o.audio||o.data,sr=o.sampling_rate||o.sr||24000;return{data:d instanceof Float32Array?d:Float32Array.from(d),sr}}
 
@@ -324,15 +325,20 @@ $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTML
   step(2);msg('The brain is writing titles, captions and hashtags.');await runBrain(cl,W);cl.forEach(fillMeta);log('Titles, captions and hashtags are ready under each clip');
   if(S.voice==='on'&&!cl.some(c=>c.meta.intro_script))log('Intro voice skipped: add a Gemini key or fill in "About this video" to enable it');
   step(3);msg('Loading face tracking.');await fp;log(face?'Face tracking ready':'Face tracking unavailable, using a centered crop');step(4);
+  const voices=[];
+  if(S.voice==='on'&&cl.some(c=>c.meta.intro_script)){crumb('voice');
+   for(let i=0;i<cl.length;i++){if(!cl[i].meta.intro_script){voices.push(null);continue}
+    try{msg(`Recording the intro voice, clip ${i+1} of ${cl.length}.`);log(`Generating the intro voice for clip ${i+1}`);voices.push(await speak(cl[i].meta.intro_script))}catch(e){voices.push(null);log('Intro voice failed ('+(e.message||e)+'). Rendering without it.')}}
+   try{tts&&tts.dispose&&await tts.dispose()}catch(e){}tts=null;log('Voice model released to free memory');crumb('')}
   for(let i=0;i<cl.length;i++){const c=cl[i];let voice=null,path=null;
-   if(S.voice==='on'&&c.meta.intro_script){try{msg(`Recording the intro voice for clip ${i+1}.`);log(`Generating the intro voice for clip ${i+1}`);voice=await speak(c.meta.intro_script)}catch(e){log('Intro voice failed ('+(e.message||e)+'). Rendering this clip without it.')}}
-   try{msg(`Tracking the speaker in clip ${i+1}.`);log(`Scanning clip ${i+1} for the speaker`);path=await scanFace(c,p=>bar((i+p*.3)/cl.length))}catch(e){log('Speaker scan failed, using live tracking')}
-   msg(`Rendering clip ${i+1} of ${cl.length}. Keep this tab open and in front.`);log(`Rendering clip ${i+1} of ${cl.length}`);
+   voice=voices[i]||null;
+   crumb('scan');try{msg(`Tracking the speaker in clip ${i+1}.`);log(`Scanning clip ${i+1} for the speaker`);path=await scanFace(c,p=>bar((i+p*.3)/cl.length))}catch(e){log('Speaker scan failed, using live tracking')}
+   crumb('render');msg(`Rendering clip ${i+1} of ${cl.length}. Keep this tab open and in front.`);log(`Rendering clip ${i+1} of ${cl.length}`);
    const r=await render(c,p=>{bar((i+p)/cl.length);setM('clips',(i+p)/cl.length)},path,voice);log(`Clip ${i+1} ready`);const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
    const a=document.createElement('a');a.className='btn sm';a.textContent='Download';a.href=r.url;a.download=`snipreel-clip-${i+1}.${r.ext}`;c.el.append(a)}
   step(5);bar(1);setM('clips',1);log('Finished');confetti();msg(face?'All clips are ready. Download the ones you like.':'Clips are ready, centered because face tracking could not load.')}
  catch(e){log('Stopped: '+(e.message||e.name));msg(e.name==='NotReadableError'?'The browser lost access to the file. Choose it again from your phone storage (not Google Photos or Drive) and retry.':'Something went wrong: '+e.message)}
- busy=false;clearInterval(tk);$('#go').disabled=false};
+ busy=false;clearInterval(tk);crumb('');$('#go').disabled=false};
 
 /* ---------- motion: scroll reveals, panel spotlight, confetti ---------- */
 function confetti(){if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;const box=document.createElement('div');box.className='confetti';const cols=['#7c5cff','#ff5c93','#ffd23f','#3ef2c1'];
@@ -345,3 +351,15 @@ function confetti(){if(matchMedia('(prefers-reduced-motion:reduce)').matches)ret
 /* tap-to-hear sound effect buttons */
 (()=>{const box=$('#prev');if(!box)return;let pa=null;['whoosh','pop','ding','cash','boom','cheer','fail','riser'].forEach(t=>{const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=t[0].toUpperCase()+t.slice(1);
  b.onclick=()=>{try{pa=pa||new (window.AudioContext||window.webkitAudioContext)();pa.resume();playSfx(pa,pa.destination,t,pa.currentTime+.03,.8,1.2)}catch(e){}};box.append(b)})})();
+
+/* crash recovery: explain where the last run stopped and switch off the heavy option */
+(()=>{let c=null;try{c=localStorage.getItem('snipreel:crumb')}catch(e){}if(!c)return;const k=c.split('|')[0];
+ const M={listening:['reading the audio','Try a shorter video.'],transcribing:['writing the transcript','Try a shorter video.'],brainlocal:['running the on-device brain','I switched the brain to Smart basic.'],voice:['making the intro voice','I turned the intro voice off. You can switch it back on.'],scan:['tracking the speaker','I switched to Fast quality.'],render:['exporting a clip','I switched to Fast quality.']}[k];
+ try{localStorage.removeItem('snipreel:crumb')}catch(e){}if(!M)return;
+ if(k==='brainlocal')S.brain='smart';if(k==='voice')S.voice='off';if(k==='scan'||k==='render')S.q='fast';sync();
+ const el=$('#crash');if(el){el.textContent=`The page stopped unexpectedly last time while ${M[0]}. ${M[1]} (Closing the tab during a run also shows this.) Tap to dismiss.`;el.hidden=false;el.onclick=()=>{el.hidden=true}}})();
+
+/* the on-device model is far too big for phones and low-memory devices, so it is switched off there */
+(()=>{if(!mobile&&(navigator.deviceMemory||8)>=4)return;const b=[...$('#c-brain').children].find(x=>x.dataset.v==='local');
+ if(b){b.disabled=true;b.title='Needs a desktop computer with enough memory';b.textContent='On-device AI (desktop only)';b.style.opacity='.45';b.style.cursor='not-allowed'}
+ if(S.brain==='local'){S.brain='smart';sync()}})();
