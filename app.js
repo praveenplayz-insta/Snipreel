@@ -70,7 +70,7 @@ async function initFace(){try{const v='0.10.14',m=await import(`https://cdn.jsde
  face=await m.FaceDetector.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'},runningMode:'VIDEO',minDetectionConfidence:.3})}catch(e){face=null}}
 function crumb(x){try{x?localStorage.setItem('snipreel:crumb',x+'|'+Date.now()):localStorage.removeItem('snipreel:crumb')}catch(e){}}
 let t0=0,tk=0;
-function log(t){const li=document.createElement('li');li.textContent=`${fmt((Date.now()-t0)/1000)}  ${t}`;const l=$('#log');l.prepend(li);while(l.children.length>60)l.lastChild.remove()}
+function log(t){const li=document.createElement('li');li.textContent=`${fmt((Date.now()-t0)/1000)}  ${t}`;const l=$('#log');l.prepend(li);while(l.children.length>200)l.lastChild.remove()}
 function setM(id,p){$('#m-'+id).textContent=Math.round(p*100)+'%';$('#b-'+id).style.width=Math.round(p*100)+'%'}
 function summary(W){const stop=new Set('the and but with this that was are have has had does did what which who how can will just like then there their about into more very your our its them than also when out all one because they would could should really going know think want right yeah okay'.split(' ')),f={};
  W.forEach(x=>{const k=x.w.toLowerCase().replace(/[^a-z']/g,'');if(k.length>3&&!stop.has(k))f[k]=(f[k]||0)+1});
@@ -141,6 +141,10 @@ function pick(W,len){const n=W.length;if(n<5)return[];
  if(!out.length)return out;const hi=Math.max(...out.map(c=>c.sc)),lo=Math.min(...out.map(c=>c.sc));out.forEach(c=>c.score=Math.round(62+37*(c.sc-lo)/((hi-lo)||1)));return out}
 
 /* render one clip in real time */
+/* ---------- video helpers that can never hang ---------- */
+function seekTo(v,t,ms=8000){return new Promise(res=>{let done=false;const fin=ok=>{if(done)return;done=true;clearTimeout(tm);v.removeEventListener('seeked',h);res(ok)},h=()=>fin(true),tm=setTimeout(()=>{log('Seeking took too long, continuing anyway');fin(false)},ms);
+ if(Math.abs(v.currentTime-t)<.02){fin(true);return}v.addEventListener('seeked',h);v.currentTime=t})}
+async function playV(v,ms=8000){let to;try{await Promise.race([v.play(),new Promise((_,rej)=>{to=setTimeout(()=>rej(new Error('the video did not start playing')),ms)})])}finally{clearTimeout(to)}}
 /* ---------- speaker path: scan the clip first, then glide the camera along a smoothed path ---------- */
 function buildPath(pts,s0,e0){if(pts.length<3)return null;const fps=30,n=Math.ceil((e0-s0)*fps)+2,raw=new Float32Array(n);
  let k=0;for(let i=0;i<n;i++){const t=s0+i/fps;while(k<pts.length-2&&pts[k+1][0]<t)k++;const a=pts[k],b=pts[k+1];raw[i]=t<=a[0]?a[1]:t>=b[0]?b[1]:a[1]+(b[1]-a[1])*(t-a[0])/(b[0]-a[0])}
@@ -148,15 +152,15 @@ function buildPath(pts,s0,e0){if(pts.length<3)return null;const fps=30,n=Math.ce
  const avg=(arr,r)=>{const o=new Float32Array(arr.length),pre=[0];for(let i=0;i<arr.length;i++)pre.push(pre[i]+arr[i]);for(let i=0;i<arr.length;i++){const a=Math.max(0,i-r),b=Math.min(arr.length-1,i+r);o[i]=(pre[b+1]-pre[a])/(b-a+1)}return o};
  const sm=avg(med(raw,Math.round(fps*.5)),Math.round(fps*.6));
  return t=>{const f=(t-s0)*fps,i=Math.max(0,Math.min(n-2,Math.floor(f))),u=Math.max(0,Math.min(1,f-i));return sm[i]+(sm[i+1]-sm[i])*u}}
-async function scanFace(c,onp){setSize();const noRoom=S.frm==='fit'||vid.videoWidth/vid.videoHeight<=W_/H_+.02;if(!face||noRoom)return null;
- vid.currentTime=c.s;await once(vid,'seeked');vid.muted=true;vid.playbackRate=mobile?2:3;
+async function scanFace(c,onp,ctl={}){setSize();const noRoom=S.frm==='fit'||vid.videoWidth/vid.videoHeight<=W_/H_+.02;if(!face||noRoom)return null;
+ await seekTo(vid,c.s);if(ctl.abort)return null;vid.muted=true;vid.playbackRate=mobile?2:3;
  const pts=[];let last=-1,lk=performance.now(),stop=null;
  const wd=setInterval(()=>{const q=performance.now()-lk;if(q>4000&&q<12000)vid.play().catch(()=>{});if(q>=12000&&stop)stop()},1500);
- try{await vid.play();await new Promise(res=>{stop=res;const go=cb=>vid.requestVideoFrameCallback?vid.requestVideoFrameCallback(cb):requestAnimationFrame(()=>cb(0,{mediaTime:vid.currentTime}));
-  const st=(_,md)=>{lk=performance.now();const t=md&&md.mediaTime!=null?md.mediaTime:vid.currentTime;if(t>=c.e||vid.ended){res();return}
+ try{await playV(vid);if(ctl.abort)return null;await new Promise(res=>{stop=res;const go=cb=>vid.requestVideoFrameCallback?vid.requestVideoFrameCallback(cb):requestAnimationFrame(()=>cb(0,{mediaTime:vid.currentTime}));
+  const st=(_,md)=>{lk=performance.now();const t=md&&md.mediaTime!=null?md.mediaTime:vid.currentTime;if(ctl.abort||t>=c.e||vid.ended){res();return}
    if(t-last>=.12){last=t;try{const d=face.detectForVideo(vid,performance.now()).detections;if(d.length){const b=d.sort((p,q)=>q.boundingBox.width-p.boundingBox.width)[0].boundingBox;pts.push([t,(b.originX+b.width/2)/vid.videoWidth])}}catch(e){}onp&&onp((t-c.s)/(c.e-c.s))}go(st)};go(st)})}
- finally{clearInterval(wd);vid.pause();vid.playbackRate=1;vid.muted=false}
- log(`Speaker seen ${pts.length} times in this clip`);return buildPath(pts,c.s,c.e)}
+ finally{clearInterval(wd);if(!ctl.abort){vid.pause();vid.playbackRate=1;vid.muted=false}}
+ if(ctl.abort)return null;log(`Speaker seen ${pts.length} times in this clip`);return buildPath(pts,c.s,c.e)}
 
 /* ---------- brain: titles, captions, hashtags and the intro script ---------- */
 const keyEl=$('#key'),ctxEl=$('#ctx');try{keyEl.value=localStorage.getItem('snipreel:key')||''}catch(e){}if(keyEl.value.trim()){S.brain='gemini';sync()}
@@ -222,16 +226,31 @@ Fields:
 Return ONLY JSON in this shape: {"clips":[{...}]} with exactly ${cl.length} objects in the same order as the clips.
 
 ${cl.map((c,i)=>'CLIP '+(i+1)+':\n'+c.w.map(x=>x.w).join(' ').slice(0,1800)).join('\n\n')}`}
-async function gemini(key,prompt){const base='https://generativelanguage.googleapis.com/v1beta',K=encodeURIComponent(key);
- const lm=await fetch(`${base}/models?pageSize=200&key=${K}`);if(!lm.ok)throw Error(lm.status===400||lm.status===403?'The Gemini key was not accepted.':`Gemini returned ${lm.status}.`);
- const all=((await lm.json()).models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/flash/.test(m.name)&&!/image|tts|live|audio|embed|robotics|computer/.test(m.name));
- const good=all.filter(m=>!/lite|preview|exp/.test(m.name)),pool=(good.length?good:all).map(m=>m.name).sort().reverse();
- for(const n of pool.slice(0,3)){const r=await fetch(`${base}/${n}:generateContent?key=${K}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',temperature:.6}})});
-  if(!r.ok){log(`Brain model ${n.split('/')[1]} answered ${r.status}, trying the next one`);continue}
-  const d=await r.json(),t=(d.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');try{return JSON.parse(t.replace(/^\s*```(?:json)?|```\s*$/g,'').trim())}catch(e){log('Brain answer was not valid JSON, trying the next model')}}
- throw Error('The brain could not produce an answer.')}
+const GMS=45000;
+async function gfetch(url,opt,ms,sig){const ac=new AbortController(),t=setTimeout(()=>ac.abort('timeout'),ms),on=()=>ac.abort('skip');
+ if(sig){if(sig.aborted)ac.abort('skip');else sig.addEventListener('abort',on)}
+ try{return await fetch(url,{...opt,signal:ac.signal})}catch(e){if(ac.signal.aborted){const x=new Error(ac.signal.reason==='skip'?'skipped':'timed out');x.why=ac.signal.reason;throw x}throw e}
+ finally{clearTimeout(t);sig&&sig.removeEventListener('abort',on)}}
+async function gemini(key,prompt,sig){const base='https://generativelanguage.googleapis.com/v1beta',K=encodeURIComponent(key),st={};
+ const tryModel=async n=>{const t0=Date.now(),iv=setInterval(()=>log(`Still waiting for ${n}, ${Math.round((Date.now()-t0)/1000)}s`),8000);
+  try{const r=await gfetch(`${base}/models/${n}:generateContent?key=${K}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',temperature:.6}})},GMS,sig);st[n]=r.status;
+   if(r.status===400||r.status===403){const j=await r.json().catch(()=>({})),m=(j.error&&j.error.message)||'';if(/API key|permission|not valid/i.test(m)){const x=new Error('The Gemini key was not accepted.');x.fatal=1;throw x}log(`${n} answered ${r.status}: ${m.slice(0,100)}`);return null}
+   if(r.status===429){log(`${n} has no free quota right now, trying another model`);return null}
+   if(!r.ok){log(`${n} answered ${r.status}, trying another model`);return null}
+   const d=await r.json(),t=(d.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+   try{return JSON.parse(t.replace(/^\s*```(?:json)?|```\s*$/g,'').trim())}catch(e){log(`${n} gave an unreadable answer, trying another model`);return null}
+  }catch(e){if(e.fatal||e.why==='skip')throw e;if(e.why==='timeout'){log(`${n} did not answer in ${GMS/1000} seconds, trying another model`);return null}log(`${n} could not be reached (${e.message||e}). Check your internet or an ad blocker.`);return null}
+  finally{clearInterval(iv)}};
+ const first=['gemini-flash-latest','gemini-flash-lite-latest','gemini-2.5-flash','gemini-2.5-flash-lite'];
+ for(const n of first){const j=await tryModel(n);if(j)return j}
+ if(Object.values(st).some(v=>v===404)){try{log('Looking up which Gemini models this key can use');const lm=await gfetch(`${base}/models?pageSize=200&key=${K}`,{},15000,sig);
+  if(lm.ok){const names=((await lm.json()).models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/flash/.test(m.name)&&!/image|tts|live|audio|embed|robotics|computer|omni/.test(m.name)).map(m=>m.name.replace('models/','')).filter(n=>!(n in st)).sort((a,b)=>(/lite/.test(a)?1:0)-(/lite/.test(b)?1:0)||(a<b?1:-1)).slice(0,3);
+   for(const n of names){const j=await tryModel(n);if(j)return j}}}catch(e){if(e.fatal||e.why==='skip')throw e}}
+ const v=Object.values(st);if(v.length&&v.every(x=>x===429))throw new Error('Gemini has no free quota for this key right now. Wait a minute and try again, or use Smart basic.');
+ throw new Error('Gemini did not give a usable answer.')}
+let skipCtl=null;
 async function runBrain(cl,W){SENTS=sentencesOf(W);SUBJ=detectSubject(W);if(S.brain==='local'&&(mobile||(navigator.deviceMemory||8)<4)){log('On-device AI is too heavy for this device. Using Smart basic instead.');S.brain='smart';sync()}if(SUBJ.name||SUBJ.topic)log(`Brain: the video seems to be about ${[SUBJ.name,SUBJ.topic].filter(Boolean).join(' and ')}`);const note=ctxEl.value.trim(),key=keyEl.value.trim(),kt=keyLines().map(x=>x.t).join(' ').slice(0,700);let res=null;
- if(S.brain==='gemini'){if(!key)log('Brain: Gemini needs a key. Using Smart basic instead.');else{try{log('Brain: asking Gemini for titles, captions, hashtags and intro scripts');const j=await gemini(key,brainPrompt(cl,note,kt));const arr=Array.isArray(j)?j:j.clips;if(Array.isArray(arr))res=arr}catch(e){log('Brain: '+e.message+' Using Smart basic instead.')}}}
+ if(S.brain==='gemini'){if(!key)log('Brain: Gemini needs a key. Using Smart basic instead.');else{try{skipCtl=new AbortController();$('#skip').hidden=false;log('Brain: asking Gemini. Tap Skip the brain if you do not want to wait.');const j=await gemini(key,brainPrompt(cl,note,kt),skipCtl.signal);const arr=Array.isArray(j)?j:j.clips;if(Array.isArray(arr))res=arr}catch(e){log('Brain: '+(e.why==='skip'?'skipped.':e.message)+' Using Smart basic instead.')}finally{$('#skip').hidden=true;skipCtl=null}}}
  else if(S.brain==='local'){crumb('brainlocal');try{res=[];for(let i=0;i<cl.length;i++){msg(`The on-device brain is writing for clip ${i+1} of ${cl.length}.`);log(`On-device brain: writing for clip ${i+1}`);res.push(await localLLM(cl[i],note,kt));await nap(30)}}catch(e){log('On-device brain failed ('+(e.message||e)+'). Using Smart basic instead.');res=null}}
  else log('Brain: Smart basic, instant and no download');
  cl.forEach((c,i)=>{const L=localBrain(c,note),R=(res&&res[i])||{};c.meta={};for(const k in L){const v=R[k];c.meta[k]=(v&&(Array.isArray(v)?v.length:String(v).trim()))?v:L[k]}c.meta.smart=!!(res&&res[i])})}
@@ -283,7 +302,7 @@ function playSfx(ac,dest,type,when,vol=.8,dur=1){const T=when;
 
 /* render one clip in real time, with an optional spoken intro */
 async function render(c,prog,pathFn,voice){setSize();const cv=document.createElement('canvas');cv.width=W_;cv.height=H_;const x=cv.getContext('2d'),K=Math.min(W_,H_)/540;x.imageSmoothingQuality='high';
- vid.muted=false;vid.currentTime=c.s;await once(vid,'seeked');
+ vid.muted=false;await seekTo(vid,c.s);
  let st=cv.captureStream(0),vt=st.getVideoTracks()[0];if(!vt||!vt.requestFrame){st=cv.captureStream(30);vt=null}
  const vs=vid.captureStream?vid.captureStream():null,at=vs?vs.getAudioTracks():[];let ac=null,nar=null,intro=0,iw=[],dest=null,ei=0;const sfx=S.sfx!=='off'?sfxPlan(c,S.sfx):[];
  if(voice||sfx.length){try{ac=new AudioContext();await ac.resume();dest=ac.createMediaStreamDestination();if(at.length)ac.createMediaStreamSource(new MediaStream(at)).connect(dest);dest.stream.getAudioTracks().forEach(t=>st.addTrack(t))}
@@ -300,7 +319,8 @@ async function render(c,prog,pathFn,voice){setSize();const cv=document.createEle
    const z=1+.07*el/intro;x.save();x.translate(W_/2,H_/2);x.scale(z,z);x.translate(-W_/2,-H_/2);frame(x,cx);x.restore();x.fillStyle='rgba(0,0,0,.4)';x.fillRect(0,0,W_,H_);
    x.save();x.font=`800 ${22*K}px "DM Sans",sans-serif`;const lab='THE CONTEXT',bw=x.measureText(lab).width+40*K;x.fillStyle='#ff5c93';x.beginPath();x.roundRect((W_-bw)/2,80*K,bw,46*K,23*K);x.fill();x.fillStyle='#fff';x.textAlign='center';x.textBaseline='middle';x.fillText(lab,W_/2,103*K);x.restore();
    caps(x,iw,el);pc.drawImage(cv,0,0);if(vt)vt.requestFrame();prog(0);requestAnimationFrame(lp)};lp()})}
- await vid.play();if(voice&&sfx.length&&ac)playSfx(ac,dest,'boom',ac.currentTime,.7);
+ try{await playV(vid)}catch(e){try{rec.stop()}catch(_){}pv.style.display='none';try{ac&&ac.close()}catch(_){}throw e}
+ if(voice&&sfx.length&&ac)playSfx(ac,dest,'boom',ac.currentTime,.7);
  let lk=performance.now(),stop=null;const wd=setInterval(()=>{const q=performance.now()-lk;if(q>5000&&q<20000)vid.play().catch(()=>{});if(q>=20000&&stop){log('Playback stalled, ending this clip early');stop()}},2000);
  await new Promise(res=>{stop=res;const go=cb=>vid.requestVideoFrameCallback?vid.requestVideoFrameCallback(cb):requestAnimationFrame(()=>cb(0,{mediaTime:vid.currentTime}));
   const step=(_,md)=>{lk=performance.now();const t=md&&md.mediaTime!=null?md.mediaTime:vid.currentTime;if(t>=c.e||vid.ended){res();return}
@@ -322,8 +342,8 @@ $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTML
   log(`Transcript ready, ${W.length} words`);summary(W);step(1);msg('Choosing the best moments.');let cl=pick(W,S.len);if(!cl.length)cl=pick(W,S.len/2);if(!cl.length)cl=pick(W,S.len/4);if(!cl.length)throw Error('Could not find a moment of that length. Try a shorter clip length.');
   setSize();cl.forEach((c,i)=>{c.el=document.createElement('article');c.el.className='card';c.el.innerHTML='<div class="vp sk"></div><div class="meta"><span class="score"></span><h4></h4><p></p></div>';
    c.el.querySelector('.vp').style.aspectRatio=`${W_} / ${H_}`;c.el.querySelector('.score').textContent=`Hook score ${c.score}`;c.el.querySelector('h4').textContent=c.title;c.el.querySelector('p').textContent=`${fmt(c.s)} to ${fmt(c.e)}`;$('#grid').append(c.el)});
-  step(2);msg('The brain is writing titles, captions and hashtags.');await runBrain(cl,W);cl.forEach(fillMeta);log('Titles, captions and hashtags are ready under each clip');
-  if(S.voice==='on'&&!cl.some(c=>c.meta.intro_script))log('Intro voice skipped: add a Gemini key or fill in "About this video" to enable it');
+  step(2);msg('The brain is writing titles, captions and hashtags.');await runBrain(cl,W);cl.forEach(fillMeta);log(`Brain finished: ${cl.filter(c=>c.meta.smart).length} of ${cl.length} clips written by the AI, ${cl.filter(c=>c.meta.intro_script).length} have an intro script`);
+  if(S.voice==='on'&&!cl.some(c=>c.meta.intro_script))log(S.brain==='gemini'&&keyEl.value.trim()?'Intro voice skipped: Gemini did not return an intro (see the lines above) and Smart basic found nothing to say. Type a line in "What the voice says first" to force one.':'Intro voice skipped: there is no intro text. Type a line in "What the voice says first" or add a Gemini key.');
   step(3);msg('Loading face tracking.');await fp;log(face?'Face tracking ready':'Face tracking unavailable, using a centered crop');step(4);
   const voices=[];
   if(S.voice==='on'&&cl.some(c=>c.meta.intro_script)){crumb('voice');
@@ -332,9 +352,9 @@ $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTML
    try{tts&&tts.dispose&&await tts.dispose()}catch(e){}tts=null;log('Voice model released to free memory');crumb('')}
   for(let i=0;i<cl.length;i++){const c=cl[i];let voice=null,path=null;
    voice=voices[i]||null;
-   crumb('scan');try{msg(`Tracking the speaker in clip ${i+1}.`);log(`Scanning clip ${i+1} for the speaker`);path=await scanFace(c,p=>bar((i+p*.3)/cl.length))}catch(e){log('Speaker scan failed, using live tracking')}
+   crumb('scan');try{msg(`Tracking the speaker in clip ${i+1}.`);log(`Scanning clip ${i+1} for the speaker`);const ctl={abort:false};path=await Promise.race([scanFace(c,p=>bar((i+p*.3)/cl.length),ctl),nap(Math.max(40000,(c.e-c.s)*8000)).then(()=>{ctl.abort=true;vid.pause();vid.playbackRate=1;vid.muted=false;throw new Error('the scan took too long')})])}catch(e){log('Speaker scan failed ('+(e.message||e)+'), using live tracking')}
    crumb('render');msg(`Rendering clip ${i+1} of ${cl.length}. Keep this tab open and in front.`);log(`Rendering clip ${i+1} of ${cl.length}`);
-   const r=await render(c,p=>{bar((i+p)/cl.length);setM('clips',(i+p)/cl.length)},path,voice);log(`Clip ${i+1} ready`);const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
+   let r=null;try{r=await render(c,p=>{bar((i+p)/cl.length);setM('clips',(i+p)/cl.length)},path,voice)}catch(e){log(`Clip ${i+1} failed: ${e.message||e}. Moving on to the next clip.`);const v0=c.el.querySelector('.vp');v0.classList.remove('sk');v0.textContent='This clip could not be exported.';continue}log(`Clip ${i+1} ready`);const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
    const a=document.createElement('a');a.className='btn sm';a.textContent='Download';a.href=r.url;a.download=`snipreel-clip-${i+1}.${r.ext}`;c.el.append(a)}
   step(5);bar(1);setM('clips',1);log('Finished');confetti();msg(face?'All clips are ready. Download the ones you like.':'Clips are ready, centered because face tracking could not load.')}
  catch(e){log('Stopped: '+(e.message||e.name));msg(e.name==='NotReadableError'?'The browser lost access to the file. Choose it again from your phone storage (not Google Photos or Drive) and retry.':'Something went wrong: '+e.message)}
@@ -363,3 +383,9 @@ function confetti(){if(matchMedia('(prefers-reduced-motion:reduce)').matches)ret
 (()=>{if(!mobile&&(navigator.deviceMemory||8)>=4)return;const b=[...$('#c-brain').children].find(x=>x.dataset.v==='local');
  if(b){b.disabled=true;b.title='Needs a desktop computer with enough memory';b.textContent='On-device AI (desktop only)';b.style.opacity='.45';b.style.cursor='not-allowed'}
  if(S.brain==='local'){S.brain='smart';sync()}})();
+
+$('#skip').onclick=()=>skipCtl&&skipCtl.abort();
+
+{const v=document.getElementById('ver');if(v)v.textContent='Build 14';}
+
+$('#copylog').onclick=async e=>{const b=e.currentTarget,t=[...$('#log').children].reverse().map(li=>li.textContent).join('\n');try{await navigator.clipboard.writeText(t);b.textContent='Copied'}catch(x){b.textContent='Could not copy'}setTimeout(()=>b.textContent='Copy log',1500)};

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 <div class="aurora"></div><div class="sp"></div>
@@ -66,7 +66,7 @@
   <div class="bar" id="barw" hidden><i id="bar"></i></div>
   <p id="msg" role="status"></p>
   <section class="panel live" id="live" hidden>
-    <div class="lh"><h3>Live activity</h3><span>Now: <b id="stage">Starting</b></span><span>Elapsed <b id="elapsed">0:00</b></span><button type="button" class="btn sm" id="skip" hidden>Skip the brain</button></div>
+    <div class="lh"><h3>Live activity</h3><span>Now: <b id="stage">Starting</b></span><span>Elapsed <b id="elapsed">0:00</b></span><button type="button" class="btn sm" id="skip" hidden>Skip the brain</button><button type="button" class="btn sm ghost" id="copylog">Copy log</button></div>
     <div class="liverow"><canvas id="pv" width="432" height="768" aria-label="Rendering preview"></canvas><div class="meters">
       <div class="meter"><span>Speech model download</span><b id="m-model">0%</b><i><u id="b-model"></u></i></div>
       <div class="meter"><span>Listening to audio</span><b id="m-audio">0%</b><i><u id="b-audio"></u></i></div>
@@ -88,8 +88,8 @@
     <li><b>Finish</b>Color grade and word-by-word captions are baked into each clip, ready to post.</li>
   </ol>
 </section>
-<footer>Snipreel runs entirely in your browser. Best in Chrome or Edge on a desktop computer.</footer>
+<footer>Snipreel runs entirely in your browser. Best in Chrome or Edge on a desktop computer.<br><small id="ver">Build 14 page loaded, but app.js has not updated. Upload every file from the zip.</small></footer>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=14"></script>
 </body>
 </html>

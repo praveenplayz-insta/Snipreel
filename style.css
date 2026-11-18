@@ -92,7 +92,7 @@ footer{text-align:center;color:var(--mu);font-size:.9rem;padding:2rem 1rem 3rem;
 .meter.ind u{width:35%!important;animation:slide 1.2s ease-in-out infinite alternate}
 @keyframes slide{from{margin-left:0}to{margin-left:65%}}
 .sum{background:#7c5cff1f;border:1px solid var(--violet);border-radius:14px;padding:.8rem 1rem;font-size:.95rem}
-.log{list-style:none;padding:0;max-height:190px;overflow:auto;font:400 .85rem/1.5 "DM Sans",sans-serif;color:var(--mu);display:grid;gap:.1rem;white-space:pre-wrap}
+.log{list-style:none;padding:0;max-height:300px;overflow:auto;font:400 .85rem/1.5 "DM Sans",sans-serif;color:var(--mu);display:grid;gap:.1rem;white-space:pre-wrap}
 .log li:first-child{color:var(--tx)}
 
 /* hero: three static reel cards, fanned like a hand of cards */
@@ -212,3 +212,8 @@ footer{text-align:center;color:var(--mu);font-size:.9rem;padding:2rem 1rem 3rem;
 .brain h3.sub{font:700 .95rem "DM Sans",sans-serif;color:var(--mu);margin:1rem 0 .5rem}
 
 .crash{background:#ff5c9320;border:1px solid var(--rose);border-radius:14px;padding:.8rem 1rem;cursor:pointer;font-size:.95rem}
+
+[hidden]{display:none!important}
+footer small{opacity:.7}
+
+.btn.ghost{background:transparent;box-shadow:0 0 0 1px var(--line) inset;color:var(--tx);animation:none}
