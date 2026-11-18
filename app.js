@@ -8,11 +8,12 @@ const GR={
  fade:{f:'contrast(.92) saturate(.85) brightness(1.06)',tint:['#9aa7c7','#e8c9b0'],ta:.35},
  noir:{f:'grayscale(1) contrast(1.22) brightness(.98)',vig:.42}};
 const DOT={natural:'#bbb',cinema:'#c9744a',vivid:'#ff3d81',warm:'#ffb347',cool:'#4cc9f0',noir:'#444',fade:'#b9a9c9'};
-const S={grade:'cinema',cap:'pop',len:30,voice:'on',ar:'9:16',frm:'crop',brain:'smart',sfx:'normal'};let file=null,busy=false,face=null;
-const vid=document.createElement('video');vid.playsInline=true;vid.preload='auto';
+const S={grade:'cinema',cap:'pop',len:30,voice:'on',ar:'9:16',frm:'crop',brain:'smart',sfx:'normal'};
+const SAVED=(()=>{try{return JSON.parse(localStorage.getItem('snipreel:set')||'{}')}catch(e){return{}}})();Object.assign(S,SAVED);let file=null,busy=false,face=null;
+let vid=document.createElement('video');vid.playsInline=true;vid.preload='auto';let fileUrl='';
 const mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||matchMedia('(pointer:coarse)').matches;
 const MODEL=mobile?'Xenova/whisper-tiny.en':'Xenova/whisper-base.en';
-S.q=mobile?'fast':'high';if(mobile)S.voice='off';let W_=540,H_=960;const pv=$('#pv'),pc=pv.getContext('2d');
+if(!SAVED.q)S.q=mobile?'fast':'high';if(mobile&&!SAVED.voice)S.voice='off';let W_=540,H_=960;const pv=$('#pv'),pc=pv.getContext('2d');
 const SZ={'9:16':{high:[720,1280],fast:[540,960]},'1:1':{high:[1080,1080],fast:[720,720]},'4:5':{high:[864,1080],fast:[576,720]},'16:9':{high:[1280,720],fast:[960,540]}};
 function setSize(){[W_,H_]=SZ[S.ar||'9:16'][S.q==='high'?'high':'fast'];pv.width=W_;pv.height=H_}setSize();
 
@@ -20,7 +21,7 @@ function setSize(){[W_,H_]=SZ[S.ar||'9:16'][S.q==='high'?'high':'fast'];pv.width
 function chips(id,key,items){const el=$(id);items.forEach(([v,l,d])=>{const b=document.createElement('button');b.className='chip';b.type='button';b.innerHTML=(d?`<i style="background:${d}"></i>`:'')+l;b.onclick=()=>{S[key]=v;sync()};b.dataset.v=v;el.append(b)});
  el.sync=()=>[...el.children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==S[key])));return el}
 const cs=[chips('#c-grade','grade',Object.keys(GR).map(k=>[k,k[0].toUpperCase()+k.slice(1),DOT[k]])),chips('#c-cap','cap',[['pop','Pop'],['clean','Clean'],['neon','Neon'],['box','Highlight box'],['comic','Comic'],['fire','Fire'],['ice','Ice'],['type','Typewriter']]),chips('#c-len','len',[[15,'15s'],[30,'30s'],[45,'45s'],[60,'60s'],[90,'90s'],[120,'2 min'],[180,'3 min']])];
-cs.push(chips('#c-voice','voice',[['on','Intro voice on'],['off','Intro voice off']]),chips('#c-q','q',[['fast','Fast'],['high','High']]),chips('#c-ar','ar',[['9:16','9:16 Shorts'],['1:1','1:1 Square'],['4:5','4:5 Feed'],['16:9','16:9 YouTube']]),chips('#c-fit','frm',[['crop','Smart crop'],['fit','Fit with blur']]),chips('#c-brain','brain',[['smart','Smart basic'],['local','On-device AI (0.5 GB)'],['gemini','Gemini']]),chips('#c-sfx','sfx',[['off','Off'],['subtle','Subtle'],['normal','Normal'],['hype','Hype']]));const sync=()=>cs.forEach(c=>c.sync());sync();
+cs.push(chips('#c-voice','voice',[['on','Intro voice on'],['off','Intro voice off']]),chips('#c-q','q',[['fast','Fast'],['high','High']]),chips('#c-ar','ar',[['9:16','9:16 Shorts'],['1:1','1:1 Square'],['4:5','4:5 Feed'],['16:9','16:9 YouTube']]),chips('#c-fit','frm',[['crop','Smart crop'],['fit','Fit with blur']]),chips('#c-brain','brain',[['smart','Smart basic'],['local','On-device AI (0.5 GB)'],['gemini','Gemini']]),chips('#c-sfx','sfx',[['off','Off'],['subtle','Subtle'],['normal','Normal'],['hype','Hype']]));const sync=()=>{cs.forEach(c=>c.sync());try{localStorage.setItem('snipreel:set',JSON.stringify(S))}catch(e){}};sync();
 
 /* drawing */
 let bgc=null;
@@ -61,7 +62,7 @@ drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDe
 ['dragleave','drop'].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.remove('over')}));
 drop.addEventListener('drop',e=>load(e.dataTransfer.files[0]));inp.onchange=()=>load(inp.files[0]);
 async function load(f){if(!f||!f.type.startsWith('video/'))return msg('That file is not a video. Choose an MP4, MOV or WebM file.');
- file=f;vid.src=URL.createObjectURL(f);await once(vid,'loadeddata');vid.currentTime=Math.min(1,vid.duration/2);
+ file=f;vid.src=URL.createObjectURL(f);fileUrl=vid.src;await once(vid,'loadeddata');vid.currentTime=Math.min(1,vid.duration/2);
  $('#dt').textContent=f.name;$('#ds').textContent=`${(f.size/1048576).toFixed(0)} MB, ${fmt(vid.duration)} long. Choose another file to replace it.`;$('#go').disabled=false;msg(mobile&&vid.duration>600?'Ready. On a phone, videos under 10 minutes work best.':'Ready. Pick your look, then make the clips.')}
 const msg=t=>$('#msg').textContent=t,fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
@@ -142,6 +143,9 @@ function pick(W,len){const n=W.length;if(n<5)return[];
 
 /* render one clip in real time */
 /* ---------- video helpers that can never hang ---------- */
+async function freshVideo(){if(!fileUrl)return vid;const v=document.createElement('video');v.playsInline=true;v.preload='auto';v.src=fileUrl;
+ await Promise.race([once(v,'loadeddata'),nap(15000)]);if(!v.videoWidth)log('The video was slow to reload, continuing anyway');
+ const old=vid;vid=v;try{old.pause();old.removeAttribute('src');old.load()}catch(e){}log('Reloaded the video player to keep playback healthy');return v}
 function seekTo(v,t,ms=8000){return new Promise(res=>{let done=false;const fin=ok=>{if(done)return;done=true;clearTimeout(tm);v.removeEventListener('seeked',h);res(ok)},h=()=>fin(true),tm=setTimeout(()=>{log('Seeking took too long, continuing anyway');fin(false)},ms);
  if(Math.abs(v.currentTime-t)<.02){fin(true);return}v.addEventListener('seeked',h);v.currentTime=t})}
 async function playV(v,ms=8000){let to;try{await Promise.race([v.play(),new Promise((_,rej)=>{to=setTimeout(()=>rej(new Error('the video did not start playing')),ms)})])}finally{clearTimeout(to)}}
@@ -226,7 +230,7 @@ Fields:
 Return ONLY JSON in this shape: {"clips":[{...}]} with exactly ${cl.length} objects in the same order as the clips.
 
 ${cl.map((c,i)=>'CLIP '+(i+1)+':\n'+c.w.map(x=>x.w).join(' ').slice(0,1800)).join('\n\n')}`}
-const GMS=45000;
+const GMS=30000;
 async function gfetch(url,opt,ms,sig){const ac=new AbortController(),t=setTimeout(()=>ac.abort('timeout'),ms),on=()=>ac.abort('skip');
  if(sig){if(sig.aborted)ac.abort('skip');else sig.addEventListener('abort',on)}
  try{return await fetch(url,{...opt,signal:ac.signal})}catch(e){if(ac.signal.aborted){const x=new Error(ac.signal.reason==='skip'?'skipped':'timed out');x.why=ac.signal.reason;throw x}throw e}
@@ -241,7 +245,7 @@ async function gemini(key,prompt,sig){const base='https://generativelanguage.goo
    try{return JSON.parse(t.replace(/^\s*```(?:json)?|```\s*$/g,'').trim())}catch(e){log(`${n} gave an unreadable answer, trying another model`);return null}
   }catch(e){if(e.fatal||e.why==='skip')throw e;if(e.why==='timeout'){log(`${n} did not answer in ${GMS/1000} seconds, trying another model`);return null}log(`${n} could not be reached (${e.message||e}). Check your internet or an ad blocker.`);return null}
   finally{clearInterval(iv)}};
- const first=['gemini-flash-latest','gemini-flash-lite-latest','gemini-2.5-flash','gemini-2.5-flash-lite'];
+ const first=['gemini-2.5-flash','gemini-flash-latest','gemini-2.5-flash-lite','gemini-flash-lite-latest'];
  for(const n of first){const j=await tryModel(n);if(j)return j}
  if(Object.values(st).some(v=>v===404)){try{log('Looking up which Gemini models this key can use');const lm=await gfetch(`${base}/models?pageSize=200&key=${K}`,{},15000,sig);
   if(lm.ok){const names=((await lm.json()).models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/flash/.test(m.name)&&!/image|tts|live|audio|embed|robotics|computer|omni/.test(m.name)).map(m=>m.name.replace('models/','')).filter(n=>!(n in st)).sort((a,b)=>(/lite/.test(a)?1:0)-(/lite/.test(b)?1:0)||(a<b?1:-1)).slice(0,3);
@@ -331,7 +335,7 @@ async function render(c,prog,pathFn,voice){setSize();const cv=document.createEle
      hist.push((b.originX+b.width/2)/vid.videoWidth);if(hist.length>7)hist.shift();const m=[...hist].sort((p,q)=>p-q)[hist.length>>1];if(Math.abs(m-tx)>.035)tx=m}}catch(e){}}
     cx+=Math.max(-.01,Math.min(.01,(tx-cx)*.07))}
    frame(x,cx);caps(x,c.w,t);pc.drawImage(cv,0,0);if(vt)vt.requestFrame();prog((t-c.s)/(c.e-c.s));go(step)};go(step)});
- clearInterval(wd);vid.pause();rec.stop();await done;ac&&ac.close();pv.style.display='none';return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
+ clearInterval(wd);vid.pause();rec.stop();await done;try{st.getTracks().forEach(t=>t.stop());vs&&vs.getTracks().forEach(t=>t.stop())}catch(e){}ac&&ac.close();pv.style.display='none';return{url:URL.createObjectURL(new Blob(chunks,{type:mime})),ext:mime.includes('mp4')?'mp4':'webm'}}
 
 /* main flow */
 const STG=['Listening and transcribing','Choosing the best moments','Writing titles and scripts','Finding the speaker','Rendering clips','All done'];
@@ -345,6 +349,7 @@ $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTML
   step(2);msg('The brain is writing titles, captions and hashtags.');await runBrain(cl,W);cl.forEach(fillMeta);log(`Brain finished: ${cl.filter(c=>c.meta.smart).length} of ${cl.length} clips written by the AI, ${cl.filter(c=>c.meta.intro_script).length} have an intro script`);
   if(S.voice==='on'&&!cl.some(c=>c.meta.intro_script))log(S.brain==='gemini'&&keyEl.value.trim()?'Intro voice skipped: Gemini did not return an intro (see the lines above) and Smart basic found nothing to say. Type a line in "What the voice says first" to force one.':'Intro voice skipped: there is no intro text. Type a line in "What the voice says first" or add a Gemini key.');
   step(3);msg('Loading face tracking.');await fp;log(face?'Face tracking ready':'Face tracking unavailable, using a centered crop');step(4);
+  if(S.voice!=='on'&&cl.some(c=>c.meta.intro_script))log('Intro voice is switched off, so the narrator intro will not play. Tap Intro voice on to hear it.');
   const voices=[];
   if(S.voice==='on'&&cl.some(c=>c.meta.intro_script)){crumb('voice');
    for(let i=0;i<cl.length;i++){if(!cl[i].meta.intro_script){voices.push(null);continue}
@@ -352,9 +357,10 @@ $('#go').onclick=async()=>{if(!file||busy)return;if(!window.MediaRecorder||!HTML
    try{tts&&tts.dispose&&await tts.dispose()}catch(e){}tts=null;log('Voice model released to free memory');crumb('')}
   for(let i=0;i<cl.length;i++){const c=cl[i];let voice=null,path=null;
    voice=voices[i]||null;
-   crumb('scan');try{msg(`Tracking the speaker in clip ${i+1}.`);log(`Scanning clip ${i+1} for the speaker`);const ctl={abort:false};path=await Promise.race([scanFace(c,p=>bar((i+p*.3)/cl.length),ctl),nap(Math.max(40000,(c.e-c.s)*8000)).then(()=>{ctl.abort=true;vid.pause();vid.playbackRate=1;vid.muted=false;throw new Error('the scan took too long')})])}catch(e){log('Speaker scan failed ('+(e.message||e)+'), using live tracking')}
+   await freshVideo();crumb('scan');try{msg(`Tracking the speaker in clip ${i+1}.`);log(`Scanning clip ${i+1} for the speaker`);const ctl={abort:false};path=await Promise.race([scanFace(c,p=>bar((i+p*.3)/cl.length),ctl),nap(Math.max(40000,(c.e-c.s)*8000)).then(()=>{ctl.abort=true;vid.pause();vid.playbackRate=1;vid.muted=false;throw new Error('the scan took too long')})])}catch(e){log('Speaker scan failed ('+(e.message||e)+'), using live tracking')}
    crumb('render');msg(`Rendering clip ${i+1} of ${cl.length}. Keep this tab open and in front.`);log(`Rendering clip ${i+1} of ${cl.length}`);
-   let r=null;try{r=await render(c,p=>{bar((i+p)/cl.length);setM('clips',(i+p)/cl.length)},path,voice)}catch(e){log(`Clip ${i+1} failed: ${e.message||e}. Moving on to the next clip.`);const v0=c.el.querySelector('.vp');v0.classList.remove('sk');v0.textContent='This clip could not be exported.';continue}log(`Clip ${i+1} ready`);const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
+   let r=null;for(let k=0;k<2&&!r;k++){if(k){log(`Retrying clip ${i+1} with a fresh video player`);await freshVideo()}try{r=await render(c,p=>{bar((i+p)/cl.length);setM('clips',(i+p)/cl.length)},path,voice)}catch(e){log(`Clip ${i+1} failed: ${e.message||e}`)}}
+   if(!r){log(`Giving up on clip ${i+1}, moving on`);const v0=c.el.querySelector('.vp');v0.classList.remove('sk');v0.textContent='This clip could not be exported.';continue}log(`Clip ${i+1} ready`);const vp=c.el.querySelector('.vp');vp.classList.remove('sk');vp.innerHTML=`<video src="${r.url}" controls playsinline></video>`;
    const a=document.createElement('a');a.className='btn sm';a.textContent='Download';a.href=r.url;a.download=`snipreel-clip-${i+1}.${r.ext}`;c.el.append(a)}
   step(5);bar(1);setM('clips',1);log('Finished');confetti();msg(face?'All clips are ready. Download the ones you like.':'Clips are ready, centered because face tracking could not load.')}
  catch(e){log('Stopped: '+(e.message||e.name));msg(e.name==='NotReadableError'?'The browser lost access to the file. Choose it again from your phone storage (not Google Photos or Drive) and retry.':'Something went wrong: '+e.message)}
@@ -386,6 +392,6 @@ function confetti(){if(matchMedia('(prefers-reduced-motion:reduce)').matches)ret
 
 $('#skip').onclick=()=>skipCtl&&skipCtl.abort();
 
-{const v=document.getElementById('ver');if(v)v.textContent='Build 14';}
+{const v=document.getElementById('ver');if(v)v.textContent='Build 15';}
 
 $('#copylog').onclick=async e=>{const b=e.currentTarget,t=[...$('#log').children].reverse().map(li=>li.textContent).join('\n');try{await navigator.clipboard.writeText(t);b.textContent='Copied'}catch(x){b.textContent='Could not copy'}setTimeout(()=>b.textContent='Copy log',1500)};
